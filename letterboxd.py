@@ -8,7 +8,7 @@ import time
 
 
 #url a changer en fonction du User
-url = "https://letterboxd.com/ton_pseudo/watchlist/"
+url = "https://letterboxd.com/Maggra/watchlist/"
 
 
 options = Options()
