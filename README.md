@@ -17,7 +17,7 @@
 Crée un environnement virtuel (recommandé, mais pas obligatoire) :
 
 python -m venv venv_letterboxd
-source venv_letterboxd/bin/activate  # Linux/Mac
+source venv_letterboxd/bin/activate  # Linux/Mac /////////////////
 venv_letterboxd\Scripts\activate     # Windows
 
 Installe les dépendances :
