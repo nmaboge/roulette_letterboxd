@@ -112,78 +112,110 @@ class LetterboxdScraper:
         
         print("\nDébut de l'analyse de la page...")
         
+        # Vérifier si nous sommes sur une version limitée de la page
+        if soup.select('.sign-in-message') or soup.select('.sign-in-overlay'):
+            raise Exception("Cette liste nécessite une connexion pour voir les films.")
+            
+        # Détecter les messages d'erreur spécifiques
+        error_messages = [
+            "You must be signed in to view this content",
+            "You must be logged in",
+            "Sign in to Letterboxd",
+            "Please sign in to access this feature"
+        ]
+        for message in error_messages:
+            if message.lower() in html_content.lower():
+                raise Exception("Cette liste nécessite une connexion pour voir les films.")
+        
         # Analyser la structure HTML
         all_classes = self._analyze_html_structure(soup)
         
-        # Méthode 1: Recherche des conteneurs de posters
+        # Vérifier si nous avons accès au contenu complet
+        film_grid = soup.select_one('.films-grid')
+        if not film_grid:
+            raise Exception("Impossible d'accéder au contenu de la liste. Une connexion est probablement requise.")
+        
+        # Méthode 1: Recherche des conteneurs de posters avec données lazy-load
         poster_containers = soup.select('li.poster-container')
         print(f"\nMéthode 1 - Conteneurs de posters trouvés: {len(poster_containers)}")
         
-        # Méthode 2: Recherche directe des posters de films
-        film_posters = soup.select('div.film-poster')
-        print(f"Méthode 2 - Posters de films trouvés: {len(film_posters)}")
-        
-        # Méthode 3: Recherche des liens de films
-        film_links = soup.select('div.poster a')
-        print(f"Méthode 3 - Liens de films trouvés: {len(film_links)}")
-        
-        # Méthode 4: Recherche générique d'images de films
-        film_images = soup.select('img[src*="film-poster"], img[data-src*="film-poster"]')
-        print(f"Méthode 4 - Images de films trouvées: {len(film_images)}")
-        
-        # Essayer toutes les méthodes dans l'ordre
-        methods = [
-            (poster_containers, 'li.poster-container'),
-            (film_posters, 'div.film-poster'),
-            (film_links, 'div.poster a'),
-            (film_images, 'img[src*="film-poster"]')
-        ]
-        
-        for elements, selector in methods:
-            if elements:
-                print(f"\nUtilisation du sélecteur: {selector}")
-                for element in elements:
-                    try:
-                        # Trouver l'image et le lien selon le type d'élément
-                        if element.name == 'img':
-                            img = element
-                            link = element.find_parent('a')
-                        else:
-                            link = element.find('a') if element.name != 'a' else element
-                            img = element.find('img')
-                        
-                        if not link or not img:
-                            continue
-                        
-                        # Extraire l'URL du film
-                        film_path = link.get('href', '')
-                        if not film_path:
-                            continue
-                        
-                        # Extraire l'URL du poster
-                        poster_url = img.get('src', '') or img.get('data-src', '')
-                        if not poster_url:
-                            continue
-                        
-                        # Améliorer la qualité de l'image
-                        poster_url = self._improve_image_quality(poster_url)
-                        
-                        film_data = {
-                            'name': img.get('alt', 'Sans titre'),
-                            'path': film_path,
-                            'image': poster_url
-                        }
-                        
-                        if film_data not in films:  # Éviter les doublons
-                            films.append(film_data)
-                            print(f"Film trouvé: {film_data['name']}")
-                        
-                    except Exception as e:
-                        print(f"Erreur lors de l'extraction d'un film: {str(e)}")
-                        continue
+        for container in poster_containers:
+            try:
+                # Chercher le lien du film et les données
+                film_link = container.select_one('div.film-poster')
+                if not film_link:
+                    continue
                 
-                if films:  # Si nous avons trouvé des films avec cette méthode, arrêter
-                    break
+                # Extraire l'URL du film depuis data-target-link
+                film_path = film_link.get('data-target-link', '')
+                if not film_path:
+                    # Fallback sur le lien direct
+                    link_element = container.select_one('a')
+                    if link_element:
+                        film_path = link_element.get('href', '')
+                
+                if not film_path:
+                    continue
+                
+                # Extraire le titre du film
+                title = container.get('data-film-name', '')
+                if not title:
+                    # Fallback sur l'attribut alt de l'image
+                    img = container.select_one('img')
+                    if img:
+                        title = img.get('alt', '')
+                
+                # Extraire l'URL du poster
+                img = container.select_one('img')
+                if img:
+                    poster_url = img.get('src', '') or img.get('data-src', '')
+                    # Si c'est une image vide, essayer de construire l'URL du poster
+                    if 'empty-poster' in poster_url:
+                        film_id = film_path.strip('/').split('/')[-1]
+                        poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
+                else:
+                    poster_url = ''
+                
+                # Améliorer la qualité de l'image
+                poster_url = self._improve_image_quality(poster_url)
+                
+                film_data = {
+                    'name': title or 'Sans titre',
+                    'path': film_path,
+                    'image': poster_url
+                }
+                
+                if film_data not in films:  # Éviter les doublons
+                    films.append(film_data)
+                    print(f"Film trouvé: {film_data['name']}")
+                
+            except Exception as e:
+                print(f"Erreur lors de l'extraction d'un film: {str(e)}")
+                continue
+        
+        # Si aucun film n'a été trouvé avec la première méthode, essayer les autres méthodes
+        if not films:
+            print("\nAucun film trouvé avec la première méthode, tentative avec les méthodes alternatives...")
+            
+            # Méthode 2: Recherche directe des posters de films
+            film_posters = soup.select('div.film-poster')
+            print(f"Méthode 2 - Posters de films trouvés: {len(film_posters)}")
+            
+            # Méthode 3: Recherche des liens de films
+            film_links = soup.select('div.poster a')
+            print(f"Méthode 3 - Liens de films trouvés: {len(film_links)}")
+            
+            # Méthode 4: Recherche générique d'images de films
+            film_images = soup.select('img[src*="film-poster"], img[data-src*="film-poster"]')
+            print(f"Méthode 4 - Images de films trouvées: {len(film_images)}")
+            
+            # Si toujours aucun film trouvé
+            if not any([film_posters, film_links, film_images]):
+                print("\nAucun film trouvé avec les méthodes alternatives.")
+                if soup.select('.sign-in-message, .sign-in-overlay, .require-signin'):
+                    raise Exception("Cette liste nécessite une connexion pour voir les films.")
+                else:
+                    raise Exception("Impossible d'extraire les films de cette liste. Vérifiez qu'elle contient des films et qu'elle est publique.")
         
         print(f"\nNombre total de films trouvés: {len(films)}")
         return films
