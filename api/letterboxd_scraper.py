@@ -265,6 +265,47 @@ class LetterboxdScraper:
         if "page not found" in content_lower or "page non trouvée" in content_lower:
             raise Exception("Cette liste n'existe pas. Vérifiez l'URL.")
 
+    def _get_films_from_api(self, username, list_type):
+        """Tente de récupérer les films via l'API AJAX de Letterboxd."""
+        try:
+            # Construire l'URL de l'API
+            if list_type == 'watchlist':
+                api_url = f"https://letterboxd.com/{username}/watchlist/by/name/"
+            elif list_type == 'films':
+                api_url = f"https://letterboxd.com/{username}/films/by/name/"
+            else:
+                return None
+
+            # Ajouter les paramètres nécessaires
+            params = {
+                'perPage': '100',  # Récupérer plus de films par page
+                'format': 'json'
+            }
+
+            # Faire la requête à l'API
+            headers = {
+                **self.headers,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json, text/javascript, */*; q=0.01',
+                'Referer': api_url
+            }
+
+            print(f"\nTentative de récupération via l'API: {api_url}")
+            response = self.session.get(api_url, headers=headers, params=params)
+            response.raise_for_status()
+
+            # Vérifier si nous avons reçu du JSON
+            if 'application/json' in response.headers.get('Content-Type', ''):
+                data = response.json()
+                return data
+            else:
+                print("L'API n'a pas retourné de JSON")
+                return None
+
+        except Exception as e:
+            print(f"Erreur lors de l'appel à l'API: {str(e)}")
+            return None
+
     def get_films(self, url):
         """Récupère un film aléatoire depuis une liste Letterboxd."""
         try:
@@ -273,8 +314,81 @@ class LetterboxdScraper:
 
             print(f"\nRécupération des films depuis: {url}")
             
-            # Faire la requête HTTP avec un délai
-            time.sleep(1)  # Petit délai pour éviter d'être bloqué
+            # Essayer d'abord l'API pour les watchlists et les films
+            if hasattr(self, 'username') and hasattr(self, 'list_type'):
+                api_data = self._get_films_from_api(self.username, self.list_type)
+                if api_data:
+                    films = []
+                    # Parser les données de l'API
+                    soup = BeautifulSoup(api_data.get('content', ''), 'html5lib')
+                    poster_containers = soup.select('li.poster-container')
+                    
+                    for container in poster_containers:
+                        try:
+                            film_link = container.select_one('div.film-poster')
+                            if not film_link:
+                                continue
+                            
+                            # Extraire l'URL du film
+                            film_path = film_link.get('data-target-link', '')
+                            if not film_path:
+                                link_element = container.select_one('a')
+                                if link_element:
+                                    film_path = link_element.get('href', '')
+                            
+                            if not film_path:
+                                continue
+                            
+                            # Extraire le titre et l'année
+                            title = container.get('data-film-name', '')
+                            if not title:
+                                img = container.select_one('img')
+                                if img:
+                                    title = img.get('alt', '')
+                            
+                            # Extraire l'URL du poster
+                            img = container.select_one('img')
+                            if img:
+                                poster_url = img.get('src', '') or img.get('data-src', '')
+                                if 'empty-poster' in poster_url:
+                                    film_id = film_path.strip('/').split('/')[-1]
+                                    poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
+                            else:
+                                poster_url = ''
+                            
+                            # Améliorer la qualité de l'image
+                            poster_url = self._improve_image_quality(poster_url)
+                            
+                            film_data = {
+                                'name': title or 'Sans titre',
+                                'path': film_path,
+                                'image': poster_url
+                            }
+                            
+                            if film_data not in films:
+                                films.append(film_data)
+                                print(f"Film trouvé via API: {film_data['name']}")
+                            
+                        except Exception as e:
+                            print(f"Erreur lors de l'extraction d'un film via API: {str(e)}")
+                            continue
+                    
+                    if films:
+                        # Sélectionner un film aléatoire
+                        chosen_film = random.choice(films)
+                        print(f"\nFilm choisi: {chosen_film.get('name', 'Sans titre')}")
+                        
+                        return {
+                            'title': chosen_film.get('name', 'Sans titre'),
+                            'poster': chosen_film.get('image', ''),
+                            'url': urljoin(self.base_url, chosen_film.get('path', '')),
+                            'director': "Non disponible",
+                            'rating': "Non noté",
+                            'year': "",
+                            'synopsis': "Synopsis non disponible"
+                        }
+            
+            # Si l'API ne fonctionne pas, essayer la méthode HTML classique
             response = self.session.get(url, timeout=10)
             response.raise_for_status()
             
@@ -289,24 +403,11 @@ class LetterboxdScraper:
             # Force UTF-8 encoding
             response.encoding = 'utf-8'
             
-            # Extraire les films
+            # Extraire les films via HTML
             films = self._extract_films_from_html(response.text)
             
             if not films:
-                # Afficher une partie du HTML pour le débogage de manière plus lisible
-                print("\nContenu HTML reçu (premiers 1000 caractères):")
-                content_preview = response.text[:1000]
-                # Nettoyer l'affichage pour le débogage
-                content_preview = ''.join(char for char in content_preview if ord(char) >= 32 or char in '\n\r\t')
-                print(content_preview)
-                
-                # Vérifier si la page contient des indicateurs de problèmes courants
-                if "Too Many Requests" in response.text:
-                    raise Exception("Trop de requêtes. Veuillez réessayer plus tard.")
-                elif "CloudFlare" in response.text:
-                    raise Exception("Protection CloudFlare détectée. Veuillez réessayer plus tard.")
-                else:
-                    raise Exception("Aucun film trouvé. Veuillez vérifier que la liste est publique et contient des films.")
+                raise Exception("Impossible d'extraire les films de cette liste. Vérifiez qu'elle contient des films et qu'elle est publique.")
 
             # Sélectionner un film aléatoire
             chosen_film = random.choice(films)
@@ -316,7 +417,7 @@ class LetterboxdScraper:
                 'title': chosen_film.get('name', 'Sans titre'),
                 'poster': chosen_film.get('image', ''),
                 'url': urljoin(self.base_url, chosen_film.get('path', '')),
-                'director': "Non disponible",  # Ces informations ne sont pas disponibles dans la liste
+                'director': "Non disponible",
                 'rating': "Non noté",
                 'year': "",
                 'synopsis': "Synopsis non disponible"
