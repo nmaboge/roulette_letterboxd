@@ -11,11 +11,16 @@
     ],
     "routes": [
         {
+            "src": "/api/(.*)",
+            "dest": "api/index.py"
+        },
+        {
             "src": "/(.*)",
             "dest": "api/index.py"
         }
     ],
     "env": {
-        "PYTHONPATH": "/var/task"
+        "PYTHONPATH": "/var/task",
+        "FLASK_ENV": "production"
     }
 } 

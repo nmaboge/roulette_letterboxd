@@ -8,7 +8,8 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24))
 csrf = CSRFProtect(app)
 
 # Configuration des templates pour Vercel
-app.template_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates'))
+template_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates'))
+app.template_folder = template_dir
 
 @app.route('/')
 def index():
@@ -16,7 +17,9 @@ def index():
 
 @app.route('/api/random-movie', methods=['POST'])
 def get_random_movie():
-    url = request.form.get('url')
+    data = request.get_json()
+    url = data.get('url') if data else None
+    
     if not url or 'letterboxd.com' not in url:
         return jsonify({'error': 'URL invalide. Veuillez entrer une URL Letterboxd valide.'}), 400
     
@@ -29,4 +32,8 @@ def get_random_movie():
         return jsonify(film)
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500 
+        return jsonify({'error': str(e)}), 500
+
+# Pour le développement local
+if __name__ == '__main__':
+    app.run(debug=True) 

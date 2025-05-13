@@ -102,12 +102,15 @@
             loadingDiv.classList.remove('hidden');
             
             try {
-                const response = await fetch('/get_random_movie', {
+                const response = await fetch('/api/random-movie', {
                     method: 'POST',
-                    body: new FormData(form),
                     headers: {
-                        'X-CSRFToken': form.querySelector('input[name="csrf_token"]').value
-                    }
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                    },
+                    body: JSON.stringify({
+                        url: form.querySelector('#url').value
+                    })
                 });
                 
                 const data = await response.json();
