@@ -19,13 +19,11 @@ def get_random_movie():
     
     try:
         scraper = LetterboxdScraper()
-        films = scraper.get_films(url)
-        if not films:
+        film = scraper.get_films(url)
+        if not film:
             return jsonify({'error': 'Aucun film trouvé dans cette watchlist.'}), 404
         
-        import random
-        chosen_film = random.choice(films)
-        return jsonify({'film': chosen_film})
+        return jsonify(film)
     
     except Exception as e:
         return jsonify({'error': f'Une erreur est survenue: {str(e)}'}), 500
