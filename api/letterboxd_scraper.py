@@ -5,6 +5,8 @@ from urllib.parse import urljoin, urlparse, quote
 import time
 import json
 import re
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 class LetterboxdScraper:
     def __init__(self):
@@ -12,17 +14,25 @@ class LetterboxdScraper:
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Accept-Encoding': 'gzip, deflate, br',
+            'Accept-Encoding': 'gzip, deflate',  # Simplified encoding acceptance
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache',
-            'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            'Sec-Ch-Ua-Mobile': '?0',
-            'Sec-Ch-Ua-Platform': '"macOS"',
-            'Upgrade-Insecure-Requests': '1',
             'Connection': 'keep-alive'
         }
         self.base_url = "https://letterboxd.com"
         self.session = requests.Session()
+        
+        # Configure retry strategy
+        retry_strategy = Retry(
+            total=3,  # number of retries
+            backoff_factor=1,  # wait 1, 2, 4 seconds between retries
+            status_forcelist=[429, 500, 502, 503, 504],  # HTTP status codes to retry on
+            allowed_methods=["GET"]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        
         self.session.headers.update(self.headers)
 
     def _is_valid_letterboxd_list_url(self, url):
@@ -203,19 +213,36 @@ class LetterboxdScraper:
             
             print(f"Statut de la réponse: {response.status_code}")
             print(f"Type de contenu: {response.headers.get('Content-Type', 'Non spécifié')}")
+            print(f"Encodage: {response.encoding}")
+            print(f"En-têtes de réponse: {dict(response.headers)}")
             
             # Vérifier si nous sommes redirigés vers la page de connexion
             if 'sign-in' in response.url:
                 raise Exception("Accès refusé. La liste est probablement privée.")
             
+            # Force UTF-8 encoding
+            response.encoding = 'utf-8'
+            
             # Extraire les films
             films = self._extract_films_from_html(response.text)
             
             if not films:
-                # Afficher une partie du HTML pour le débogage
+                # Afficher une partie du HTML pour le débogage de manière plus lisible
                 print("\nContenu HTML reçu (premiers 1000 caractères):")
-                print(response.text[:1000])
-                raise Exception("Aucun film trouvé. Veuillez vérifier que la liste est publique et contient des films.")
+                content_preview = response.text[:1000]
+                # Nettoyer l'affichage pour le débogage
+                content_preview = ''.join(char for char in content_preview if ord(char) >= 32 or char in '\n\r\t')
+                print(content_preview)
+                
+                # Vérifier si la page contient des indicateurs de problèmes courants
+                if "Too Many Requests" in response.text:
+                    raise Exception("Trop de requêtes. Veuillez réessayer plus tard.")
+                elif "CloudFlare" in response.text:
+                    raise Exception("Protection CloudFlare détectée. Veuillez réessayer plus tard.")
+                elif "sign in" in response.text.lower():
+                    raise Exception("Cette liste nécessite une connexion.")
+                else:
+                    raise Exception("Aucun film trouvé. Veuillez vérifier que la liste est publique et contient des films.")
 
             # Sélectionner un film aléatoire
             chosen_film = random.choice(films)
