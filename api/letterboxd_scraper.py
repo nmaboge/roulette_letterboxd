@@ -18,7 +18,8 @@ class LetterboxdScraper:
             'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
             'Sec-Ch-Ua-Mobile': '?0',
             'Sec-Ch-Ua-Platform': '"macOS"',
-            'Upgrade-Insecure-Requests': '1'
+            'Upgrade-Insecure-Requests': '1',
+            'Connection': 'keep-alive'
         }
         self.base_url = "https://letterboxd.com"
         self.session = requests.Session()
@@ -48,121 +49,119 @@ class LetterboxdScraper:
         except:
             return False
 
+    def _analyze_html_structure(self, soup):
+        """Analyse la structure HTML pour le débogage."""
+        print("\nAnalyse de la structure HTML:")
+        
+        # Vérifier la présence du conteneur principal
+        main_content = soup.find('div', {'id': 'content'})
+        print(f"Conteneur principal trouvé: {bool(main_content)}")
+        
+        # Vérifier les classes principales
+        print("\nClasses principales trouvées:")
+        all_classes = set()
+        for tag in soup.find_all(class_=True):
+            all_classes.update(tag.get('class', []))
+        print(f"Nombre total de classes uniques: {len(all_classes)}")
+        print("Classes pertinentes trouvées:")
+        relevant_classes = ['poster-container', 'film-poster', 'poster', 'film-detail']
+        for class_name in relevant_classes:
+            elements = soup.find_all(class_=class_name)
+            print(f"- {class_name}: {len(elements)} éléments")
+        
+        # Vérifier les balises img
+        images = soup.find_all('img')
+        print(f"\nNombre total d'images: {len(images)}")
+        print("Attributs des images:")
+        for img in images[:5]:  # Afficher les 5 premières images
+            print(f"- alt: {img.get('alt', 'None')}")
+            print(f"  src: {img.get('src', 'None')}")
+            print(f"  data-src: {img.get('data-src', 'None')}")
+            print("---")
+        
+        return all_classes
+
     def _extract_films_from_html(self, html_content):
         """Extrait les films depuis le contenu HTML avec plusieurs méthodes."""
         films = []
         soup = BeautifulSoup(html_content, 'html5lib')
         
-        print("Analyse de la page HTML...")
+        print("\nDébut de l'analyse de la page...")
+        
+        # Analyser la structure HTML
+        all_classes = self._analyze_html_structure(soup)
         
         # Méthode 1: Recherche des conteneurs de posters
         poster_containers = soup.select('li.poster-container')
-        print(f"Méthode 1 - Conteneurs de posters trouvés: {len(poster_containers)}")
+        print(f"\nMéthode 1 - Conteneurs de posters trouvés: {len(poster_containers)}")
         
         # Méthode 2: Recherche directe des posters de films
         film_posters = soup.select('div.film-poster')
         print(f"Méthode 2 - Posters de films trouvés: {len(film_posters)}")
         
         # Méthode 3: Recherche des liens de films
-        film_links = soup.select('div.film-poster > a')
+        film_links = soup.select('div.poster a')
         print(f"Méthode 3 - Liens de films trouvés: {len(film_links)}")
         
-        # Essayer d'abord la méthode 1
-        if poster_containers:
-            print("Utilisation de la méthode 1...")
-            for container in poster_containers:
-                try:
-                    link = container.select_one('div.film-poster a')
-                    if not link:
-                        continue
+        # Méthode 4: Recherche générique d'images de films
+        film_images = soup.select('img[src*="film-poster"], img[data-src*="film-poster"]')
+        print(f"Méthode 4 - Images de films trouvées: {len(film_images)}")
+        
+        # Essayer toutes les méthodes dans l'ordre
+        methods = [
+            (poster_containers, 'li.poster-container'),
+            (film_posters, 'div.film-poster'),
+            (film_links, 'div.poster a'),
+            (film_images, 'img[src*="film-poster"]')
+        ]
+        
+        for elements, selector in methods:
+            if elements:
+                print(f"\nUtilisation du sélecteur: {selector}")
+                for element in elements:
+                    try:
+                        # Trouver l'image et le lien selon le type d'élément
+                        if element.name == 'img':
+                            img = element
+                            link = element.find_parent('a')
+                        else:
+                            link = element.find('a') if element.name != 'a' else element
+                            img = element.find('img')
                         
-                    img = link.select_one('img')
-                    if not img:
-                        continue
-                    
-                    film_url = urljoin(self.base_url, link['href'])
-                    poster_url = img.get('src', '')
-                    if not poster_url:
-                        poster_url = img.get('data-src', '')
-                    
-                    if not poster_url:
-                        continue
-                    
-                    # Améliorer la qualité de l'image
-                    poster_url = self._improve_image_quality(poster_url)
-                    
-                    films.append({
-                        'name': img.get('alt', 'Sans titre'),
-                        'path': link['href'],
-                        'image': poster_url
-                    })
-                except Exception as e:
-                    print(f"Erreur lors de l'extraction d'un film (méthode 1): {str(e)}")
-                    continue
-        
-        # Si la méthode 1 n'a pas fonctionné, essayer la méthode 2
-        if not films and film_posters:
-            print("Utilisation de la méthode 2...")
-            for poster in film_posters:
-                try:
-                    link = poster.find('a')
-                    if not link:
-                        continue
+                        if not link or not img:
+                            continue
                         
-                    img = poster.find('img')
-                    if not img:
+                        # Extraire l'URL du film
+                        film_path = link.get('href', '')
+                        if not film_path:
+                            continue
+                        
+                        # Extraire l'URL du poster
+                        poster_url = img.get('src', '') or img.get('data-src', '')
+                        if not poster_url:
+                            continue
+                        
+                        # Améliorer la qualité de l'image
+                        poster_url = self._improve_image_quality(poster_url)
+                        
+                        film_data = {
+                            'name': img.get('alt', 'Sans titre'),
+                            'path': film_path,
+                            'image': poster_url
+                        }
+                        
+                        if film_data not in films:  # Éviter les doublons
+                            films.append(film_data)
+                            print(f"Film trouvé: {film_data['name']}")
+                        
+                    except Exception as e:
+                        print(f"Erreur lors de l'extraction d'un film: {str(e)}")
                         continue
-                    
-                    film_url = urljoin(self.base_url, link['href'])
-                    poster_url = img.get('src', '')
-                    if not poster_url:
-                        poster_url = img.get('data-src', '')
-                    
-                    if not poster_url:
-                        continue
-                    
-                    # Améliorer la qualité de l'image
-                    poster_url = self._improve_image_quality(poster_url)
-                    
-                    films.append({
-                        'name': img.get('alt', 'Sans titre'),
-                        'path': link['href'],
-                        'image': poster_url
-                    })
-                except Exception as e:
-                    print(f"Erreur lors de l'extraction d'un film (méthode 2): {str(e)}")
-                    continue
+                
+                if films:  # Si nous avons trouvé des films avec cette méthode, arrêter
+                    break
         
-        # Si aucune méthode n'a fonctionné, essayer la méthode 3
-        if not films and film_links:
-            print("Utilisation de la méthode 3...")
-            for link in film_links:
-                try:
-                    img = link.find('img')
-                    if not img:
-                        continue
-                    
-                    film_url = urljoin(self.base_url, link['href'])
-                    poster_url = img.get('src', '')
-                    if not poster_url:
-                        poster_url = img.get('data-src', '')
-                    
-                    if not poster_url:
-                        continue
-                    
-                    # Améliorer la qualité de l'image
-                    poster_url = self._improve_image_quality(poster_url)
-                    
-                    films.append({
-                        'name': img.get('alt', 'Sans titre'),
-                        'path': link['href'],
-                        'image': poster_url
-                    })
-                except Exception as e:
-                    print(f"Erreur lors de l'extraction d'un film (méthode 3): {str(e)}")
-                    continue
-        
-        print(f"Nombre total de films trouvés: {len(films)}")
+        print(f"\nNombre total de films trouvés: {len(films)}")
         return films
 
     def _improve_image_quality(self, poster_url):
@@ -195,11 +194,15 @@ class LetterboxdScraper:
             if not self._is_valid_letterboxd_list_url(url):
                 raise Exception("URL invalide. Veuillez entrer une URL de liste Letterboxd valide.")
 
-            print(f"Récupération des films depuis: {url}")
+            print(f"\nRécupération des films depuis: {url}")
             
-            # Faire la requête HTTP
-            response = self.session.get(url)
+            # Faire la requête HTTP avec un délai
+            time.sleep(1)  # Petit délai pour éviter d'être bloqué
+            response = self.session.get(url, timeout=10)
             response.raise_for_status()
+            
+            print(f"Statut de la réponse: {response.status_code}")
+            print(f"Type de contenu: {response.headers.get('Content-Type', 'Non spécifié')}")
             
             # Vérifier si nous sommes redirigés vers la page de connexion
             if 'sign-in' in response.url:
@@ -210,13 +213,13 @@ class LetterboxdScraper:
             
             if not films:
                 # Afficher une partie du HTML pour le débogage
-                print("Contenu HTML reçu (premiers 500 caractères):")
-                print(response.text[:500])
+                print("\nContenu HTML reçu (premiers 1000 caractères):")
+                print(response.text[:1000])
                 raise Exception("Aucun film trouvé. Veuillez vérifier que la liste est publique et contient des films.")
 
             # Sélectionner un film aléatoire
             chosen_film = random.choice(films)
-            print(f"Film choisi: {chosen_film.get('name', 'Sans titre')}")
+            print(f"\nFilm choisi: {chosen_film.get('name', 'Sans titre')}")
 
             return {
                 'title': chosen_film.get('name', 'Sans titre'),
@@ -229,8 +232,8 @@ class LetterboxdScraper:
             }
 
         except requests.RequestException as e:
-            print(f"Erreur de requête: {str(e)}")
+            print(f"\nErreur de requête: {str(e)}")
             raise Exception(f"Erreur de connexion: {str(e)}")
         except Exception as e:
-            print(f"Erreur générale: {str(e)}")
+            print(f"\nErreur générale: {str(e)}")
             raise Exception(f"Erreur lors de la récupération des films: {str(e)}") 
