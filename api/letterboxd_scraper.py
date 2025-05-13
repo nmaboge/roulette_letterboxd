@@ -133,89 +133,76 @@ class LetterboxdScraper:
         # Vérifier si nous avons accès au contenu complet
         film_grid = soup.select_one('.films-grid')
         if not film_grid:
+            film_grid = soup.select_one('.poster-list')
+        
+        if not film_grid:
             raise Exception("Impossible d'accéder au contenu de la liste. Une connexion est probablement requise.")
         
-        # Méthode 1: Recherche des conteneurs de posters avec données lazy-load
-        poster_containers = soup.select('li.poster-container')
-        print(f"\nMéthode 1 - Conteneurs de posters trouvés: {len(poster_containers)}")
+        # Rechercher les films avec différents sélecteurs
+        selectors = [
+            'li.poster-container',
+            'div.film-poster',
+            '.poster-list li',
+            '.poster-container'
+        ]
         
-        for container in poster_containers:
-            try:
-                # Chercher le lien du film et les données
-                film_link = container.select_one('div.film-poster')
-                if not film_link:
-                    continue
+        for selector in selectors:
+            elements = soup.select(selector)
+            if elements:
+                print(f"\nUtilisation du sélecteur: {selector}")
+                print(f"Éléments trouvés: {len(elements)}")
                 
-                # Extraire l'URL du film depuis data-target-link
-                film_path = film_link.get('data-target-link', '')
-                if not film_path:
-                    # Fallback sur le lien direct
-                    link_element = container.select_one('a')
-                    if link_element:
-                        film_path = link_element.get('href', '')
+                for element in elements:
+                    try:
+                        # Extraire les données du film
+                        film_link = element.select_one('div.film-poster') or element.select_one('a')
+                        if not film_link:
+                            continue
+                        
+                        # Extraire l'URL du film
+                        film_path = film_link.get('data-target-link') or film_link.get('href', '')
+                        if not film_path:
+                            continue
+                        
+                        # Extraire le titre
+                        title = element.get('data-film-name') or element.get('data-film-slug', '')
+                        if not title:
+                            img = element.select_one('img')
+                            if img:
+                                title = img.get('alt', '')
+                        
+                        # Nettoyer le titre
+                        title = title.replace('-', ' ').title()
+                        
+                        # Extraire l'URL du poster
+                        img = element.select_one('img')
+                        if img:
+                            poster_url = img.get('src', '') or img.get('data-src', '')
+                            if 'empty-poster' in poster_url:
+                                film_id = film_path.strip('/').split('/')[-1]
+                                poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
+                        else:
+                            poster_url = ''
+                        
+                        # Améliorer la qualité de l'image
+                        poster_url = self._improve_image_quality(poster_url)
+                        
+                        film_data = {
+                            'name': title or 'Sans titre',
+                            'path': film_path,
+                            'image': poster_url
+                        }
+                        
+                        if film_data not in films:
+                            films.append(film_data)
+                            print(f"Film trouvé: {film_data['name']}")
+                        
+                    except Exception as e:
+                        print(f"Erreur lors de l'extraction d'un film: {str(e)}")
+                        continue
                 
-                if not film_path:
-                    continue
-                
-                # Extraire le titre du film
-                title = container.get('data-film-name', '')
-                if not title:
-                    # Fallback sur l'attribut alt de l'image
-                    img = container.select_one('img')
-                    if img:
-                        title = img.get('alt', '')
-                
-                # Extraire l'URL du poster
-                img = container.select_one('img')
-                if img:
-                    poster_url = img.get('src', '') or img.get('data-src', '')
-                    # Si c'est une image vide, essayer de construire l'URL du poster
-                    if 'empty-poster' in poster_url:
-                        film_id = film_path.strip('/').split('/')[-1]
-                        poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
-                else:
-                    poster_url = ''
-                
-                # Améliorer la qualité de l'image
-                poster_url = self._improve_image_quality(poster_url)
-                
-                film_data = {
-                    'name': title or 'Sans titre',
-                    'path': film_path,
-                    'image': poster_url
-                }
-                
-                if film_data not in films:  # Éviter les doublons
-                    films.append(film_data)
-                    print(f"Film trouvé: {film_data['name']}")
-                
-            except Exception as e:
-                print(f"Erreur lors de l'extraction d'un film: {str(e)}")
-                continue
-        
-        # Si aucun film n'a été trouvé avec la première méthode, essayer les autres méthodes
-        if not films:
-            print("\nAucun film trouvé avec la première méthode, tentative avec les méthodes alternatives...")
-            
-            # Méthode 2: Recherche directe des posters de films
-            film_posters = soup.select('div.film-poster')
-            print(f"Méthode 2 - Posters de films trouvés: {len(film_posters)}")
-            
-            # Méthode 3: Recherche des liens de films
-            film_links = soup.select('div.poster a')
-            print(f"Méthode 3 - Liens de films trouvés: {len(film_links)}")
-            
-            # Méthode 4: Recherche générique d'images de films
-            film_images = soup.select('img[src*="film-poster"], img[data-src*="film-poster"]')
-            print(f"Méthode 4 - Images de films trouvées: {len(film_images)}")
-            
-            # Si toujours aucun film trouvé
-            if not any([film_posters, film_links, film_images]):
-                print("\nAucun film trouvé avec les méthodes alternatives.")
-                if soup.select('.sign-in-message, .sign-in-overlay, .require-signin'):
-                    raise Exception("Cette liste nécessite une connexion pour voir les films.")
-                else:
-                    raise Exception("Impossible d'extraire les films de cette liste. Vérifiez qu'elle contient des films et qu'elle est publique.")
+                if films:
+                    break
         
         print(f"\nNombre total de films trouvés: {len(films)}")
         return films
@@ -268,39 +255,90 @@ class LetterboxdScraper:
     def _get_films_from_api(self, username, list_type):
         """Tente de récupérer les films via l'API AJAX de Letterboxd."""
         try:
-            # Construire l'URL de l'API
+            # Construire les différentes variantes d'URL à essayer
+            url_variants = []
             if list_type == 'watchlist':
-                api_url = f"https://letterboxd.com/{username}/watchlist/by/name/"
+                url_variants = [
+                    f"https://letterboxd.com/{username}/watchlist/",
+                    f"https://letterboxd.com/{username}/watchlist/by/name/",
+                    f"https://letterboxd.com/{username}/watchlist/by/added/",
+                    f"https://letterboxd.com/{username}/watchlist/size/small/"
+                ]
             elif list_type == 'films':
-                api_url = f"https://letterboxd.com/{username}/films/by/name/"
+                url_variants = [
+                    f"https://letterboxd.com/{username}/films/",
+                    f"https://letterboxd.com/{username}/films/by/name/",
+                    f"https://letterboxd.com/{username}/films/size/small/"
+                ]
             else:
                 return None
 
-            # Ajouter les paramètres nécessaires
+            # Paramètres de requête
             params = {
-                'perPage': '100',  # Récupérer plus de films par page
-                'format': 'json'
+                'perPage': '100',
+                'sort': 'name',
+                'layout': 'grid',
+                'includeSpoilers': 'false',
+                'includeReviews': 'false',
+                'ajax': 'true'
             }
 
-            # Faire la requête à l'API
-            headers = {
+            # En-têtes spécifiques pour l'API
+            api_headers = {
                 **self.headers,
                 'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json, text/javascript, */*; q=0.01',
-                'Referer': api_url
+                'Accept': 'text/html, */*; q=0.01',
+                'X-AJAX': 'true',
+                'X-AJAX-Referer': url_variants[0]
             }
 
-            print(f"\nTentative de récupération via l'API: {api_url}")
-            response = self.session.get(api_url, headers=headers, params=params)
-            response.raise_for_status()
+            # Essayer chaque variante d'URL
+            for api_url in url_variants:
+                try:
+                    print(f"\nTentative avec l'URL: {api_url}")
+                    
+                    # Première requête pour obtenir le CSRF token
+                    init_response = self.session.get(api_url, headers=self.headers)
+                    init_response.raise_for_status()
+                    
+                    # Extraire le CSRF token
+                    csrf_token = None
+                    for cookie in self.session.cookies:
+                        if cookie.name == 'com.xk72.webparts.csrf':
+                            csrf_token = cookie.value
+                            break
+                    
+                    if csrf_token:
+                        api_headers['X-CSRF-Token'] = csrf_token
+                        print("CSRF Token trouvé et ajouté aux en-têtes")
+                    
+                    # Faire la requête AJAX
+                    response = self.session.get(
+                        api_url,
+                        headers=api_headers,
+                        params=params,
+                        timeout=10
+                    )
+                    response.raise_for_status()
+                    
+                    print(f"Statut: {response.status_code}")
+                    print(f"Type de contenu: {response.headers.get('Content-Type')}")
+                    
+                    # Vérifier si nous avons du contenu HTML valide
+                    if response.text and '<' in response.text:
+                        soup = BeautifulSoup(response.text, 'html5lib')
+                        film_elements = soup.select('li.poster-container')
+                        
+                        if film_elements:
+                            print(f"Films trouvés: {len(film_elements)}")
+                            return {'content': response.text}
+                    
+                except Exception as e:
+                    print(f"Échec pour {api_url}: {str(e)}")
+                    continue
 
-            # Vérifier si nous avons reçu du JSON
-            if 'application/json' in response.headers.get('Content-Type', ''):
-                data = response.json()
-                return data
-            else:
-                print("L'API n'a pas retourné de JSON")
-                return None
+            print("Aucune variante d'URL n'a fonctionné")
+            return None
 
         except Exception as e:
             print(f"Erreur lors de l'appel à l'API: {str(e)}")
