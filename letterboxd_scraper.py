@@ -9,7 +9,7 @@ from selenium.common.exceptions import WebDriverException, TimeoutException, NoS
 import time
 import random
 import requests
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 class LetterboxdScraper:
     def __init__(self):
@@ -23,6 +23,29 @@ class LetterboxdScraper:
         self.options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36")
         self.driver = None
         self.base_url = "https://letterboxd.com"
+
+    def _is_valid_letterboxd_list_url(self, url):
+        """Vérifie si l'URL est une liste Letterboxd valide."""
+        try:
+            parsed = urlparse(url)
+            if parsed.netloc != "letterboxd.com":
+                return False
+            
+            # Vérifier le chemin de l'URL
+            path_parts = parsed.path.strip('/').split('/')
+            if len(path_parts) < 2:
+                return False
+                
+            # Les URLs valides sont :
+            # /username/watchlist/
+            # /username/list/list-name/
+            # /username/films/
+            return (
+                (len(path_parts) == 2 and path_parts[1] in ['watchlist', 'films']) or
+                (len(path_parts) >= 3 and path_parts[1] == 'list')
+            )
+        except:
+            return False
 
     def _check_internet_connection(self):
         try:
@@ -90,9 +113,21 @@ class LetterboxdScraper:
             # Utiliser JavaScript pour extraire les films
             films_data = self.driver.execute_script("""
                 const films = [];
-                document.querySelectorAll('.poster-container').forEach(container => {
-                    const link = container.querySelector('a');
-                    const img = container.querySelector('img');
+                // Sélectionner tous les conteneurs de films possibles
+                const containers = document.querySelectorAll('.poster-container, .film-poster');
+                
+                containers.forEach(container => {
+                    let link, img;
+                    
+                    // Gérer les différentes structures possibles
+                    if (container.classList.contains('film-poster')) {
+                        link = container.closest('a');
+                        img = container.querySelector('img');
+                    } else {
+                        link = container.querySelector('a');
+                        img = container.querySelector('img');
+                    }
+                    
                     if (link && img) {
                         films.push({
                             title: img.alt,
@@ -107,31 +142,40 @@ class LetterboxdScraper:
             if not films_data:
                 print("Aucun film trouvé avec JavaScript, tentative avec Selenium...")
                 # Méthode alternative avec Selenium
-                containers = self.driver.find_elements(By.CSS_SELECTOR, '.poster-container')
-                for container in containers:
-                    try:
-                        link = container.find_element(By.TAG_NAME, 'a')
-                        img = container.find_element(By.TAG_NAME, 'img')
-                        
-                        films.append({
-                            'title': img.get_attribute('alt'),
-                            'poster': img.get_attribute('src'),
-                            'url': link.get_attribute('href')
-                        })
-                    except Exception as e:
-                        print(f"Erreur lors de l'extraction d'un film: {str(e)}")
-                        continue
+                selectors = ['.poster-container', '.film-poster']
+                for selector in selectors:
+                    containers = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for container in containers:
+                        try:
+                            if selector == '.film-poster':
+                                parent = container.find_element(By.XPATH, "ancestor::a[1]")
+                                img = container.find_element(By.TAG_NAME, 'img')
+                                link = parent
+                            else:
+                                link = container.find_element(By.TAG_NAME, 'a')
+                                img = container.find_element(By.TAG_NAME, 'img')
+                            
+                            films.append({
+                                'title': img.get_attribute('alt'),
+                                'poster': img.get_attribute('src'),
+                                'url': link.get_attribute('href')
+                            })
+                        except Exception as e:
+                            print(f"Erreur lors de l'extraction d'un film: {str(e)}")
+                            continue
             else:
                 films = films_data
             
-            # Filtrer les entrées invalides
-            films = [f for f in films if f.get('title') and f.get('url')]
-            
-            # Convertir les URLs en chemins relatifs
+            # Filtrer les entrées invalides et dédoublonner par titre
+            seen_titles = set()
+            unique_films = []
             for film in films:
-                film['url'] = film['url'].replace(self.base_url, '')
+                if film.get('title') and film.get('url') and film['title'] not in seen_titles:
+                    seen_titles.add(film['title'])
+                    film['url'] = film['url'].replace(self.base_url, '')
+                    unique_films.append(film)
             
-            return films
+            return unique_films
             
         except Exception as e:
             print(f"Erreur lors de l'extraction des films: {str(e)}")
@@ -174,6 +218,10 @@ class LetterboxdScraper:
     def get_films(self, url):
         try:
             print(f"Démarrage de la récupération des films depuis {url}")
+            
+            if not self._is_valid_letterboxd_list_url(url):
+                raise Exception("URL invalide. Veuillez entrer une URL de liste Letterboxd valide (watchlist, liste personnalisée ou films).")
+            
             self._check_internet_connection()
             self._setup_driver()
             
@@ -192,7 +240,7 @@ class LetterboxdScraper:
             
             print(f"Nombre de films trouvés: {len(films)}")
             if not films:
-                raise Exception("Aucun film n'a pu être trouvé. Veuillez vérifier que la watchlist est publique et contient des films.")
+                raise Exception("Aucun film n'a pu être trouvé. Veuillez vérifier que la liste est publique et contient des films.")
 
             print("Sélection d'un film au hasard...")
             chosen_film = random.choice(films)
