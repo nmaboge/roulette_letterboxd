@@ -294,9 +294,30 @@ class LetterboxdScraper:
             
             film_details = self._get_film_details(film_url)
             
+            # Get the poster URL and upgrade it to a higher quality version
+            poster_url = chosen_film['poster']
+            
+            # Remplacer les suffixes de basse qualité par la plus haute qualité disponible
+            quality_suffixes = ['_tmb', '_med', '_smd', '_md', '_std']
+            for suffix in quality_suffixes:
+                poster_url = poster_url.replace(suffix, '_lrg')  # Utiliser _lrg pour une meilleure compatibilité
+            
+            # Ajuster les dimensions pour avoir une meilleure qualité tout en restant compatible
+            dimensions_patterns = [
+                '0-150-0-225',
+                '0-202-0-304',
+                '0-230-0-345',
+                '0-250-0-370'
+            ]
+            
+            target_size = '0-500-0-750'  # Taille optimale qui fonctionne bien avec le CDN de Letterboxd
+            
+            for pattern in dimensions_patterns:
+                poster_url = poster_url.replace(pattern, target_size)
+            
             return {
                 'title': chosen_film['title'],
-                'poster': chosen_film['poster'].replace('_tmb', '_med'),
+                'poster': poster_url,
                 'url': film_url,
                 'director': film_details['director'],
                 'rating': film_details['rating'],
