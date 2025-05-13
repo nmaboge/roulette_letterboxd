@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roulette Letterboxd</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-2xl mx-auto">
+            <h1 class="text-4xl font-bold text-center mb-8">
+                <i class="fas fa-film text-pink-500"></i> Roulette Letterboxd
+            </h1>
+            
+            <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
+                <form id="movieForm" class="space-y-4">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div>
+                        <label for="url" class="block text-sm font-medium mb-2">URL de votre watchlist</label>
+                        <input type="url" id="url" name="url" 
+                               class="w-full px-4 py-2 rounded bg-gray-700 border border-gray-600 focus:border-pink-500 focus:ring-1 focus:ring-pink-500"
+                               placeholder="https://letterboxd.com/username/watchlist/"
+                               required>
+                    </div>
+                    <button type="submit" 
+                            class="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded transition duration-200">
+                        <i class="fas fa-random mr-2"></i> Choisir un film au hasard
+                    </button>
+                </form>
+
+                <div id="result" class="mt-6 hidden">
+                    <div class="text-center">
+                        <h2 class="text-2xl font-bold mb-2">Film choisi :</h2>
+                        <p id="movieTitle" class="text-xl text-pink-400"></p>
+                    </div>
+                </div>
+
+                <div id="error" class="mt-6 hidden">
+                    <div class="bg-red-500 bg-opacity-20 border border-red-500 text-red-500 px-4 py-3 rounded">
+                        <p id="errorMessage"></p>
+                    </div>
+                </div>
+
+                <div id="loading" class="mt-6 hidden">
+                    <div class="flex justify-center items-center">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
+                        <span class="ml-2">Recherche en cours...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('movieForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const form = e.target;
+            const resultDiv = document.getElementById('result');
+            const errorDiv = document.getElementById('error');
+            const loadingDiv = document.getElementById('loading');
+            
+            // Reset display
+            resultDiv.classList.add('hidden');
+            errorDiv.classList.add('hidden');
+            loadingDiv.classList.remove('hidden');
+            
+            try {
+                const response = await fetch('/get_random_movie', {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {
+                        'X-CSRFToken': form.querySelector('input[name="csrf_token"]').value
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error);
+                }
+                
+                document.getElementById('movieTitle').textContent = data.film;
+                resultDiv.classList.remove('hidden');
+            } catch (error) {
+                document.getElementById('errorMessage').textContent = error.message;
+                errorDiv.classList.remove('hidden');
+            } finally {
+                loadingDiv.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html> 
