@@ -49,14 +49,28 @@ class LetterboxdScraper:
             # Extraire le username et le type de liste
             self.username = path_parts[0]
             self.list_type = path_parts[1]
+            
+            # Vérifier si c'est un profil privé connu
+            if self.list_type == 'profile-private':
+                raise Exception("Ce profil est privé. Les listes ne sont pas accessibles.")
+            
             if len(path_parts) > 2:
                 self.list_slug = path_parts[2]
             
-            return (
+            # Vérifier le type de liste
+            valid = (
                 (len(path_parts) == 2 and path_parts[1] in ['watchlist', 'films']) or
                 (len(path_parts) >= 3 and path_parts[1] == 'list')
             )
-        except:
+            
+            if not valid:
+                raise Exception("Type de liste non supporté. Utilisez 'watchlist', 'films' ou une liste personnalisée.")
+                
+            return valid
+            
+        except Exception as e:
+            if str(e).startswith("Type de liste") or str(e).startswith("Ce profil"):
+                raise
             return False
 
     def _analyze_html_structure(self, soup):
@@ -198,6 +212,27 @@ class LetterboxdScraper:
         
         return poster_url
 
+    def _check_page_accessibility(self, response):
+        """Vérifie si la page est accessible et fournit des informations détaillées sur les problèmes."""
+        # Vérifier la redirection vers la page de connexion
+        if 'sign-in' in response.url or 'login' in response.url:
+            raise Exception("Cette liste nécessite une connexion. Assurez-vous que la liste est publique.")
+        
+        # Vérifier le contenu pour des messages spécifiques
+        content_lower = response.text.lower()
+        
+        if "this profile is private" in content_lower or "ce profil est privé" in content_lower:
+            raise Exception("Ce profil est privé. Les listes ne sont pas accessibles.")
+            
+        if "this list is private" in content_lower or "cette liste est privée" in content_lower:
+            raise Exception("Cette liste est privée. Demandez à son propriétaire de la rendre publique.")
+            
+        if "you must be logged in" in content_lower or "vous devez être connecté" in content_lower:
+            raise Exception("Cette liste nécessite une connexion. Assurez-vous que la liste est publique.")
+            
+        if "page not found" in content_lower or "page non trouvée" in content_lower:
+            raise Exception("Cette liste n'existe pas. Vérifiez l'URL.")
+
     def get_films(self, url):
         """Récupère un film aléatoire depuis une liste Letterboxd."""
         try:
@@ -216,9 +251,8 @@ class LetterboxdScraper:
             print(f"Encodage: {response.encoding}")
             print(f"En-têtes de réponse: {dict(response.headers)}")
             
-            # Vérifier si nous sommes redirigés vers la page de connexion
-            if 'sign-in' in response.url:
-                raise Exception("Accès refusé. La liste est probablement privée.")
+            # Vérifier l'accessibilité de la page
+            self._check_page_accessibility(response)
             
             # Force UTF-8 encoding
             response.encoding = 'utf-8'
@@ -239,8 +273,6 @@ class LetterboxdScraper:
                     raise Exception("Trop de requêtes. Veuillez réessayer plus tard.")
                 elif "CloudFlare" in response.text:
                     raise Exception("Protection CloudFlare détectée. Veuillez réessayer plus tard.")
-                elif "sign in" in response.text.lower():
-                    raise Exception("Cette liste nécessite une connexion.")
                 else:
                     raise Exception("Aucun film trouvé. Veuillez vérifier que la liste est publique et contient des films.")
 
@@ -263,4 +295,4 @@ class LetterboxdScraper:
             raise Exception(f"Erreur de connexion: {str(e)}")
         except Exception as e:
             print(f"\nErreur générale: {str(e)}")
-            raise Exception(f"Erreur lors de la récupération des films: {str(e)}") 
+            raise Exception(str(e)) 
