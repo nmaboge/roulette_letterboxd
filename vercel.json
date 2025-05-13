@@ -6,7 +6,10 @@
             "use": "@vercel/python",
             "config": {
                 "maxLambdaSize": "15mb",
-                "runtime": "python3.9"
+                "runtime": "python3.9",
+                "includeFiles": [
+                    "api/**"
+                ]
             }
         }
     ],
@@ -29,6 +32,8 @@
         "FLASK_ENV": "production",
         "CHROME_PATH": "/opt/google/chrome/chrome",
         "DISPLAY": ":99",
-        "PYTHONUNBUFFERED": "1"
+        "PYTHONUNBUFFERED": "1",
+        "SELENIUM_WIRE_SSL_VERIFY": "false",
+        "CHROME_IGNORE_CERTIFICATE_ERRORS": "1"
     }
 }

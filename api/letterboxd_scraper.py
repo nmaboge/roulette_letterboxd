@@ -1,5 +1,4 @@
-from selenium import webdriver
-import undetected_chromedriver as uc
+from seleniumwire import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -12,12 +11,14 @@ import requests
 from urllib.parse import urljoin, urlparse
 import os
 import chromedriver_autoinstaller
-import platform
+import shutil
+import tempfile
 
 class LetterboxdScraper:
     def __init__(self):
         self.driver = None
         self.base_url = "https://letterboxd.com"
+        self.temp_dir = None
 
     def _is_valid_letterboxd_list_url(self, url):
         """Vérifie si l'URL est une liste Letterboxd valide."""
@@ -47,27 +48,60 @@ class LetterboxdScraper:
     def _setup_driver(self):
         if not self.driver:
             try:
-                options = uc.ChromeOptions()
+                # Créer un dossier temporaire pour Chrome
+                self.temp_dir = tempfile.mkdtemp()
+                
+                # Configuration de Chrome
+                chrome_options = {
+                    'seleniumwire_options': {
+                        'verify_ssl': False,
+                        'suppress_connection_errors': True
+                    }
+                }
+                
+                options = Options()
                 options.add_argument('--headless')
                 options.add_argument('--no-sandbox')
                 options.add_argument('--disable-dev-shm-usage')
                 options.add_argument('--disable-gpu')
-                options.add_argument("--window-size=1920,1080")
+                options.add_argument(f'--user-data-dir={self.temp_dir}')
+                options.add_argument('--window-size=1920,1080')
+                options.add_argument('--disable-blink-features=AutomationControlled')
+                options.add_experimental_option('excludeSwitches', ['enable-automation'])
+                options.add_experimental_option('useAutomationExtension', False)
                 
+                # Configuration spécifique pour Vercel
                 if 'VERCEL' in os.environ:
-                    options.binary_location = "/opt/google/chrome/chrome"
+                    chrome_path = os.environ.get('CHROME_PATH', '/opt/google/chrome/chrome')
+                    if os.path.exists(chrome_path):
+                        options.binary_location = chrome_path
                 
-                # Utiliser undetected-chromedriver
-                self.driver = uc.Chrome(
+                # Installation du ChromeDriver
+                chromedriver_path = chromedriver_autoinstaller.install()
+                service = Service(chromedriver_path)
+                
+                # Création du driver avec selenium-wire
+                self.driver = webdriver.Chrome(
+                    service=service,
                     options=options,
-                    driver_executable_path=chromedriver_autoinstaller.install(),
-                    version_main=114  # Version stable de Chrome
+                    seleniumwire_options=chrome_options['seleniumwire_options']
                 )
                 
                 self.driver.set_page_load_timeout(30)
                 
+                # Configuration supplémentaire pour éviter la détection
+                self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+                    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                })
+                
+                # Vérification que le driver est bien initialisé
+                if not self.driver:
+                    raise Exception("Le driver n'a pas pu être initialisé correctement")
+                
             except Exception as e:
                 print(f"Erreur détaillée lors de l'initialisation du navigateur: {str(e)}")
+                if self.temp_dir and os.path.exists(self.temp_dir):
+                    shutil.rmtree(self.temp_dir, ignore_errors=True)
                 raise Exception(f"Erreur lors de l'initialisation du navigateur: {str(e)}")
 
     def _cleanup_driver(self):
@@ -78,6 +112,12 @@ class LetterboxdScraper:
                 pass
             finally:
                 self.driver = None
+                
+        if self.temp_dir and os.path.exists(self.temp_dir):
+            try:
+                shutil.rmtree(self.temp_dir, ignore_errors=True)
+            except Exception:
+                pass
 
     def _wait_and_scroll(self, retries=3, scroll_pause_time=2):
         for i in range(retries):
