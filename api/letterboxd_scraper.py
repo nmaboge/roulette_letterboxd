@@ -1,4 +1,5 @@
 from selenium import webdriver
+import undetected_chromedriver as uc
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -46,37 +47,25 @@ class LetterboxdScraper:
     def _setup_driver(self):
         if not self.driver:
             try:
-                chrome_options = Options()
-                chrome_options.add_argument('--headless')
-                chrome_options.add_argument('--no-sandbox')
-                chrome_options.add_argument('--disable-dev-shm-usage')
-                chrome_options.add_argument('--disable-gpu')
-                chrome_options.add_argument('--disable-setuid-sandbox')
-                chrome_options.add_argument('--single-process')
-                chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                chrome_options.add_experimental_option('useAutomationExtension', False)
-                chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-
-                # Configuration spécifique pour Vercel
+                options = uc.ChromeOptions()
+                options.add_argument('--headless')
+                options.add_argument('--no-sandbox')
+                options.add_argument('--disable-dev-shm-usage')
+                options.add_argument('--disable-gpu')
+                options.add_argument("--window-size=1920,1080")
+                
                 if 'VERCEL' in os.environ:
-                    chrome_options.binary_location = "/opt/google/chrome/chrome"
-                    service = Service()
-                else:
-                    # Configuration locale
-                    chromedriver_autoinstaller.install()
-                    service = Service()
-
-                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+                    options.binary_location = "/opt/google/chrome/chrome"
+                
+                # Utiliser undetected-chromedriver
+                self.driver = uc.Chrome(
+                    options=options,
+                    driver_executable_path=chromedriver_autoinstaller.install(),
+                    version_main=114  # Version stable de Chrome
+                )
+                
                 self.driver.set_page_load_timeout(30)
                 
-                self.driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
-                    'source': '''
-                        Object.defineProperty(navigator, 'webdriver', {
-                            get: () => undefined
-                        })
-                    '''
-                })
             except Exception as e:
                 print(f"Erreur détaillée lors de l'initialisation du navigateur: {str(e)}")
                 raise Exception(f"Erreur lors de l'initialisation du navigateur: {str(e)}")

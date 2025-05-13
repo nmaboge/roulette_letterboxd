@@ -2,10 +2,10 @@
     "version": 2,
     "builds": [
         {
-            "src": "app.py",
+            "src": "api/index.py",
             "use": "@vercel/python",
             "config": {
-                "maxLambdaSize": "10mb",
+                "maxLambdaSize": "15mb",
                 "runtime": "python3.9"
             }
         }
@@ -16,12 +16,19 @@
             "dest": "/static/$1"
         },
         {
+            "src": "/api/(.*)",
+            "dest": "api/index.py"
+        },
+        {
             "src": "/(.*)",
-            "dest": "/app.py"
+            "dest": "api/index.py"
         }
     ],
     "env": {
         "PYTHONPATH": "/var/task",
-        "FLASK_ENV": "production"
+        "FLASK_ENV": "production",
+        "CHROME_PATH": "/opt/google/chrome/chrome",
+        "DISPLAY": ":99",
+        "PYTHONUNBUFFERED": "1"
     }
 }
