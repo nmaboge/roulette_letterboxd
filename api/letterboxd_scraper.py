@@ -93,7 +93,7 @@ class LetterboxdScraper:
         try:
             response = self.session.get(url)
             response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response.text, 'html5lib')
             
             # Extraire les détails
             director_elem = soup.select_one('.film-director')
@@ -127,7 +127,7 @@ class LetterboxdScraper:
             # Première requête pour obtenir le nombre de pages
             response = self.session.get(url)
             response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response.text, 'html5lib')
             
             # Obtenir le nombre total de pages
             total_pages = self._get_page_count(soup)
@@ -140,7 +140,7 @@ class LetterboxdScraper:
                 page_url = f"{url}page/{random_page}/"
                 response = self.session.get(page_url)
                 response.raise_for_status()
-                soup = BeautifulSoup(response.text, 'html.parser')
+                soup = BeautifulSoup(response.text, 'html5lib')
             
             # Extraire les films de la page
             films = self._extract_films_from_page(soup)
