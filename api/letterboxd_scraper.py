@@ -1,32 +1,17 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import WebDriverException, TimeoutException, NoSuchElementException, StaleElementReferenceException
-import time
-import random
 import requests
+from bs4 import BeautifulSoup
+import random
 from urllib.parse import urljoin, urlparse
-import platform
-import os
-import subprocess
-import shutil
+import time
 
 class LetterboxdScraper:
     def __init__(self):
-        self.options = Options()
-        self.options.add_argument("--headless=new")
-        self.options.add_argument("--no-sandbox")
-        self.options.add_argument("--disable-dev-shm-usage")
-        self.options.add_argument("--disable-blink-features=AutomationControlled")
-        self.options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        self.options.add_experimental_option('useAutomationExtension', False)
-        self.options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36")
-        self.driver = None
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
         self.base_url = "https://letterboxd.com"
+        self.session = requests.Session()
+        self.session.headers.update(self.headers)
 
     def _is_valid_letterboxd_list_url(self, url):
         """Vérifie si l'URL est une liste Letterboxd valide."""
@@ -35,15 +20,10 @@ class LetterboxdScraper:
             if parsed.netloc != "letterboxd.com":
                 return False
             
-            # Vérifier le chemin de l'URL
             path_parts = parsed.path.strip('/').split('/')
             if len(path_parts) < 2:
                 return False
                 
-            # Les URLs valides sont :
-            # /username/watchlist/
-            # /username/list/list-name/
-            # /username/films/
             return (
                 (len(path_parts) == 2 and path_parts[1] in ['watchlist', 'films']) or
                 (len(path_parts) >= 3 and path_parts[1] == 'list')
@@ -51,282 +31,141 @@ class LetterboxdScraper:
         except:
             return False
 
-    def _check_internet_connection(self):
-        try:
-            requests.get(self.base_url, timeout=5)
-            return True
-        except requests.RequestException:
-            raise Exception("Impossible de se connecter à Letterboxd. Veuillez vérifier votre connexion internet.")
+    def _get_page_count(self, soup):
+        """Obtient le nombre total de pages."""
+        pagination = soup.select_one('.pagination')
+        if not pagination:
+            return 1
         
-    def _get_chrome_version(self):
+        last_page = pagination.select('li.paginate-page')
+        if not last_page:
+            return 1
+            
         try:
-            # For macOS
-            if platform.system() == 'Darwin':
-                chrome_path = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-                if os.path.exists(chrome_path):
-                    output = subprocess.check_output([chrome_path, '--version'])
-                    version = output.decode('utf-8').strip().split(' ')[-1]
-                    return version.split('.')[0]  # Return major version
-        except Exception:
-            pass
-        return None
+            return int(last_page[-1].get_text().strip())
+        except:
+            return 1
 
-    def _setup_driver(self):
-        if not self.driver:
-            try:
-                # Detect if running on Mac ARM64
-                is_mac_arm = platform.system() == 'Darwin' and platform.machine() == 'arm64'
-                
-                if is_mac_arm:
-                    chrome_path = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-                    if not os.path.exists(chrome_path):
-                        raise Exception("Google Chrome n'est pas installé dans le chemin par défaut")
-                    
-                    self.options.binary_location = chrome_path
-                    
-                    # Get Chrome version and set up environment
-                    os.environ['WDM_LOCAL'] = '1'  # Force local driver usage
-                    os.environ['WDM_SSL_VERIFY'] = '0'  # Disable SSL verification
-                    
-                    # Install ChromeDriver
-                    driver_path = ChromeDriverManager().install()
-                    
-                    # Ensure the driver is executable
-                    os.chmod(driver_path, 0o755)
-                    
-                    service = Service(executable_path=driver_path)
-                else:
-                    # For non-ARM64 systems, use default setup
-                    service = Service(ChromeDriverManager().install())
-                
-                # Create Chrome driver with specific options
-                self.driver = webdriver.Chrome(service=service, options=self.options)
-                self.driver.set_page_load_timeout(30)
-                
-                # Add JavaScript to mask automation
-                self.driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
-                    'source': '''
-                        Object.defineProperty(navigator, 'webdriver', {
-                            get: () => undefined
-                        })
-                    '''
-                })
-            except Exception as e:
-                raise Exception(f"Erreur lors de l'initialisation du navigateur: {str(e)}")
-
-    def _cleanup_driver(self):
-        if self.driver:
-            try:
-                self.driver.quit()
-            except Exception:
-                pass
-            finally:
-                self.driver = None
-
-    def _wait_and_scroll(self, retries=3, scroll_pause_time=2):
-        for i in range(retries):
-            try:
-                # Scroll progressif
-                last_height = self.driver.execute_script("return document.body.scrollHeight")
-                while True:
-                    # Scroll jusqu'en bas
-                    self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                    time.sleep(scroll_pause_time)
-                    
-                    # Calculer la nouvelle hauteur
-                    new_height = self.driver.execute_script("return document.body.scrollHeight")
-                    if new_height == last_height:
-                        break
-                    last_height = new_height
-                
-                return True
-            except Exception as e:
-                print(f"Erreur lors du scroll: {str(e)}")
-                if i == retries - 1:
-                    return False
-                time.sleep(2)
-        return False
-
-    def _extract_films_from_page(self):
+    def _extract_films_from_page(self, soup):
+        """Extrait les films d'une page."""
         films = []
-        try:
-            # Attendre que les films soient chargés
-            time.sleep(3)
-            
-            # Utiliser JavaScript pour extraire les films
-            films_data = self.driver.execute_script("""
-                const films = [];
-                // Sélectionner tous les conteneurs de films possibles
-                const containers = document.querySelectorAll('.poster-container, .film-poster');
-                
-                containers.forEach(container => {
-                    let link, img;
-                    
-                    // Gérer les différentes structures possibles
-                    if (container.classList.contains('film-poster')) {
-                        link = container.closest('a');
-                        img = container.querySelector('img');
-                    } else {
-                        link = container.querySelector('a');
-                        img = container.querySelector('img');
-                    }
-                    
-                    if (link && img) {
-                        films.push({
-                            title: img.alt,
-                            poster: img.src,
-                            url: link.href
-                        });
-                    }
-                });
-                return films;
-            """)
-            
-            if not films_data:
-                print("Aucun film trouvé avec JavaScript, tentative avec Selenium...")
-                # Méthode alternative avec Selenium
-                selectors = ['.poster-container', '.film-poster']
-                for selector in selectors:
-                    containers = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                    for container in containers:
-                        try:
-                            if selector == '.film-poster':
-                                parent = container.find_element(By.XPATH, "ancestor::a[1]")
-                                img = container.find_element(By.TAG_NAME, 'img')
-                                link = parent
-                            else:
-                                link = container.find_element(By.TAG_NAME, 'a')
-                                img = container.find_element(By.TAG_NAME, 'img')
-                            
-                            films.append({
-                                'title': img.get_attribute('alt'),
-                                'poster': img.get_attribute('src'),
-                                'url': link.get_attribute('href')
-                            })
-                        except Exception as e:
-                            print(f"Erreur lors de l'extraction d'un film: {str(e)}")
-                            continue
-            else:
-                films = films_data
-            
-            # Filtrer les entrées invalides et dédoublonner par titre
-            seen_titles = set()
-            unique_films = []
-            for film in films:
-                if film.get('title') and film.get('url') and film['title'] not in seen_titles:
-                    seen_titles.add(film['title'])
-                    film['url'] = film['url'].replace(self.base_url, '')
-                    unique_films.append(film)
-            
-            return unique_films
-            
-        except Exception as e:
-            print(f"Erreur lors de l'extraction des films: {str(e)}")
-            return []
-
-    def _get_film_details(self, film_url):
-        max_retries = 3
-        for attempt in range(max_retries):
+        poster_containers = soup.select('li.poster-container')
+        
+        for container in poster_containers:
             try:
-                self.driver.get(film_url)
-                time.sleep(3)
+                link = container.select_one('div.film-poster a')
+                if not link:
+                    continue
+                    
+                img = link.select_one('img')
+                if not img:
+                    continue
                 
-                # Récupérer les informations avec JavaScript
-                details = self.driver.execute_script("""
-                    return {
-                        director: document.querySelector('.film-director') ? 
-                                document.querySelector('.film-director').textContent.trim() : 'Non disponible',
-                        rating: document.querySelector('.average-rating') ? 
-                                document.querySelector('.average-rating').textContent.trim() : 'Non noté',
-                        year: document.querySelector('.film-header-lockup h1.headline-1 .number') ? 
-                              document.querySelector('.film-header-lockup h1.headline-1 .number').textContent.trim() : '',
-                        synopsis: document.querySelector('.truncate') ? 
-                                 document.querySelector('.truncate').textContent.trim() : 'Synopsis non disponible'
-                    };
-                """)
+                film_url = urljoin(self.base_url, link['href'])
+                poster_url = img.get('src', '')
                 
-                return details
+                # Améliorer la qualité de l'image
+                if poster_url:
+                    # Remplacer les suffixes de basse qualité
+                    quality_suffixes = ['_tmb', '_med', '_smd', '_md', '_std']
+                    for suffix in quality_suffixes:
+                        poster_url = poster_url.replace(suffix, '_lrg')
+                    
+                    # Ajuster les dimensions
+                    poster_url = poster_url.replace('0-150-0-225', '0-500-0-750')
+                    poster_url = poster_url.replace('0-202-0-304', '0-500-0-750')
+                    poster_url = poster_url.replace('0-230-0-345', '0-500-0-750')
+                
+                films.append({
+                    'title': img.get('alt', 'Sans titre'),
+                    'poster': poster_url,
+                    'url': film_url
+                })
                 
             except Exception as e:
-                print(f"Tentative {attempt + 1} échouée: {str(e)}")
-                if attempt == max_retries - 1:
-                    return {
-                        'director': "Non disponible",
-                        'rating': "Non noté",
-                        'year': "",
-                        'synopsis': "Synopsis non disponible"
-                    }
-                time.sleep(2)
+                print(f"Erreur lors de l'extraction d'un film: {str(e)}")
+                continue
+                
+        return films
 
-    def get_films(self, url):
+    def _get_film_details(self, url):
+        """Récupère les détails d'un film."""
         try:
-            print(f"Démarrage de la récupération des films depuis {url}")
+            response = self.session.get(url)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
             
-            if not self._is_valid_letterboxd_list_url(url):
-                raise Exception("URL invalide. Veuillez entrer une URL de liste Letterboxd valide (watchlist, liste personnalisée ou films).")
-            
-            self._check_internet_connection()
-            self._setup_driver()
-            
-            try:
-                print("Chargement de la page...")
-                self.driver.get(url)
-                time.sleep(5)  # Attente plus longue pour le chargement initial
-            except WebDriverException as e:
-                raise Exception(f"Impossible d'accéder à la page. Erreur: {str(e)}")
-            
-            print("Scroll de la page...")
-            self._wait_and_scroll()
-            
-            print("Extraction des films...")
-            films = self._extract_films_from_page()
-            
-            print(f"Nombre de films trouvés: {len(films)}")
-            if not films:
-                raise Exception("Aucun film n'a pu être trouvé. Veuillez vérifier que la liste est publique et contient des films.")
-
-            print("Sélection d'un film au hasard...")
-            chosen_film = random.choice(films)
-            print(f"Film choisi: {chosen_film['title']}")
-            
-            film_url = urljoin(self.base_url, chosen_film['url'])
-            print(f"Récupération des détails du film depuis {film_url}")
-            
-            film_details = self._get_film_details(film_url)
-            
-            # Get the poster URL and upgrade it to a higher quality version
-            poster_url = chosen_film['poster']
-            
-            # Remplacer les suffixes de basse qualité par la plus haute qualité disponible
-            quality_suffixes = ['_tmb', '_med', '_smd', '_md', '_std']
-            for suffix in quality_suffixes:
-                poster_url = poster_url.replace(suffix, '_lrg')  # Utiliser _lrg pour une meilleure compatibilité
-            
-            # Ajuster les dimensions pour avoir une meilleure qualité tout en restant compatible
-            dimensions_patterns = [
-                '0-150-0-225',
-                '0-202-0-304',
-                '0-230-0-345',
-                '0-250-0-370'
-            ]
-            
-            target_size = '0-500-0-750'  # Taille optimale qui fonctionne bien avec le CDN de Letterboxd
-            
-            for pattern in dimensions_patterns:
-                poster_url = poster_url.replace(pattern, target_size)
+            # Extraire les détails
+            director_elem = soup.select_one('.film-director')
+            rating_elem = soup.select_one('.average-rating')
+            year_elem = soup.select_one('.film-header-lockup h1.headline-1 .number')
+            synopsis_elem = soup.select_one('.truncate') or soup.select_one('meta[name="description"]')
             
             return {
-                'title': chosen_film['title'],
-                'poster': poster_url,
-                'url': film_url,
-                'director': film_details['director'],
-                'rating': film_details['rating'],
-                'year': film_details['year'],
-                'synopsis': film_details['synopsis']
+                'director': director_elem.get_text().strip() if director_elem else "Non disponible",
+                'rating': rating_elem.get_text().strip() if rating_elem else "Non noté",
+                'year': year_elem.get_text().strip() if year_elem else "",
+                'synopsis': synopsis_elem.get('content', '').strip() if synopsis_elem and synopsis_elem.get('content') else 
+                          synopsis_elem.get_text().strip() if synopsis_elem else "Synopsis non disponible"
             }
             
         except Exception as e:
-            raise Exception(f"Erreur lors de la récupération des films: {str(e)}")
+            print(f"Erreur lors de la récupération des détails: {str(e)}")
+            return {
+                'director': "Non disponible",
+                'rating': "Non noté",
+                'year': "",
+                'synopsis': "Synopsis non disponible"
+            }
+
+    def get_films(self, url):
+        """Récupère un film aléatoire depuis une liste Letterboxd."""
+        try:
+            if not self._is_valid_letterboxd_list_url(url):
+                raise Exception("URL invalide. Veuillez entrer une URL de liste Letterboxd valide.")
             
-        finally:
-            self._cleanup_driver() 
+            # Première requête pour obtenir le nombre de pages
+            response = self.session.get(url)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Obtenir le nombre total de pages
+            total_pages = self._get_page_count(soup)
+            
+            # Choisir une page aléatoire
+            random_page = random.randint(1, total_pages)
+            
+            # Si ce n'est pas la première page, faire une nouvelle requête
+            if random_page > 1:
+                page_url = f"{url}page/{random_page}/"
+                response = self.session.get(page_url)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Extraire les films de la page
+            films = self._extract_films_from_page(soup)
+            
+            if not films:
+                raise Exception("Aucun film trouvé. Veuillez vérifier que la liste est publique et contient des films.")
+            
+            # Sélectionner un film aléatoire
+            chosen_film = random.choice(films)
+            
+            # Récupérer les détails du film
+            details = self._get_film_details(chosen_film['url'])
+            
+            # Combiner les informations
+            return {
+                'title': chosen_film['title'],
+                'poster': chosen_film['poster'],
+                'url': chosen_film['url'],
+                'director': details['director'],
+                'rating': details['rating'],
+                'year': details['year'],
+                'synopsis': details['synopsis']
+            }
+            
+        except requests.RequestException as e:
+            raise Exception(f"Erreur de connexion: {str(e)}")
+        except Exception as e:
+            raise Exception(f"Erreur lors de la récupération des films: {str(e)}") 

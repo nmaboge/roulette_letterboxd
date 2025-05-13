@@ -1,9 +1,4 @@
-flask==3.0.2
-selenium==4.18.1
-webdriver-manager==4.0.1
-rich==13.7.0
-python-dotenv==1.0.1
-flask-wtf==1.2.1
-requests==2.31.0
-gunicorn==21.2.0
-beautifulsoup4==4.12.3
+flask==2.0.1
+flask-wtf==1.0.0
+requests==2.26.0
+beautifulsoup4==4.9.3
