@@ -5,11 +5,16 @@
             "src": "api/index.py",
             "use": "@vercel/python",
             "config": {
-                "maxLambdaSize": "15mb"
+                "maxLambdaSize": "15mb",
+                "runtime": "python3.9"
             }
         }
     ],
     "routes": [
+        {
+            "src": "/static/(.*)",
+            "dest": "/static/$1"
+        },
         {
             "src": "/api/(.*)",
             "dest": "api/index.py"
@@ -21,6 +26,7 @@
     ],
     "env": {
         "PYTHONPATH": "/var/task",
-        "FLASK_ENV": "production"
+        "FLASK_ENV": "production",
+        "CHROME_PATH": "/opt/google/chrome/chrome"
     }
 } 

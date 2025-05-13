@@ -1,27 +1,54 @@
-# 🎬 Roulette Letterboxd
+# Roulette Letterboxd
 
-Une application web qui permet de choisir aléatoirement un film dans votre watchlist Letterboxd.
+Une application web qui sélectionne aléatoirement un film depuis une liste Letterboxd.
 
-## 🚀 Installation
+## Fonctionnalités
 
-1. Clonez ce dépôt :
-```bash
-git clone https://github.com/votre-username/roulette-letterboxd.git
-cd roulette-letterboxd
-```
+- Support des watchlists Letterboxd
+- Support des listes personnalisées
+- Support des pages de films d'utilisateur
+- Interface moderne et responsive
+- Affichage des détails du film (réalisateur, année, note, synopsis)
 
-2. Créez un environnement virtuel Python et activez-le :
+## Déploiement sur Vercel
+
+1. Créez un compte sur [Vercel](https://vercel.com/signup) si ce n'est pas déjà fait
+2. Allez sur [https://vercel.com/new](https://vercel.com/new)
+3. Importez ce projet depuis GitHub
+4. Dans les paramètres du projet, ajoutez les variables d'environnement suivantes :
+   - `FLASK_ENV`: `production`
+   - `PYTHONPATH`: `/var/task`
+   - `CHROME_PATH`: `/opt/google/chrome/chrome`
+5. Déployez !
+
+## Développement local
+
+1. Créez un environnement virtuel :
 ```bash
 python -m venv venv
-source venv/bin/activate  # Sur Unix/MacOS
+source venv/bin/activate  # Sur Unix
 # ou
 venv\Scripts\activate  # Sur Windows
 ```
 
-3. Installez les dépendances :
+2. Installez les dépendances :
 ```bash
 pip install -r requirements.txt
 ```
+
+3. Lancez l'application :
+```bash
+python api/index.py
+```
+
+## Structure du projet
+
+- `api/` : Code de l'application Flask et du scraper
+  - `index.py` : Point d'entrée de l'application
+  - `letterboxd_scraper.py` : Logique de scraping
+- `templates/` : Templates HTML
+- `vercel.json` : Configuration du déploiement
+- `requirements.txt` : Dépendances Python
 
 ## 🎯 Utilisation
 
