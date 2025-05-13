@@ -1,24 +1,28 @@
-from seleniumwire import webdriver
+from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import WebDriverException, TimeoutException, NoSuchElementException, StaleElementReferenceException
 import time
 import random
 import requests
 from urllib.parse import urljoin, urlparse
-import os
-import chromedriver_autoinstaller
-import shutil
-import tempfile
 
 class LetterboxdScraper:
     def __init__(self):
+        self.options = Options()
+        self.options.add_argument("--headless")
+        self.options.add_argument("--no-sandbox")
+        self.options.add_argument("--disable-dev-shm-usage")
+        self.options.add_argument("--disable-blink-features=AutomationControlled")
+        self.options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        self.options.add_experimental_option('useAutomationExtension', False)
+        self.options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36")
         self.driver = None
         self.base_url = "https://letterboxd.com"
-        self.temp_dir = None
 
     def _is_valid_letterboxd_list_url(self, url):
         """Vérifie si l'URL est une liste Letterboxd valide."""
@@ -27,10 +31,15 @@ class LetterboxdScraper:
             if parsed.netloc != "letterboxd.com":
                 return False
             
+            # Vérifier le chemin de l'URL
             path_parts = parsed.path.strip('/').split('/')
             if len(path_parts) < 2:
                 return False
                 
+            # Les URLs valides sont :
+            # /username/watchlist/
+            # /username/list/list-name/
+            # /username/films/
             return (
                 (len(path_parts) == 2 and path_parts[1] in ['watchlist', 'films']) or
                 (len(path_parts) >= 3 and path_parts[1] == 'list')
@@ -48,60 +57,18 @@ class LetterboxdScraper:
     def _setup_driver(self):
         if not self.driver:
             try:
-                # Créer un dossier temporaire pour Chrome
-                self.temp_dir = tempfile.mkdtemp()
-                
-                # Configuration de Chrome
-                chrome_options = {
-                    'seleniumwire_options': {
-                        'verify_ssl': False,
-                        'suppress_connection_errors': True
-                    }
-                }
-                
-                options = Options()
-                options.add_argument('--headless')
-                options.add_argument('--no-sandbox')
-                options.add_argument('--disable-dev-shm-usage')
-                options.add_argument('--disable-gpu')
-                options.add_argument(f'--user-data-dir={self.temp_dir}')
-                options.add_argument('--window-size=1920,1080')
-                options.add_argument('--disable-blink-features=AutomationControlled')
-                options.add_experimental_option('excludeSwitches', ['enable-automation'])
-                options.add_experimental_option('useAutomationExtension', False)
-                
-                # Configuration spécifique pour Vercel
-                if 'VERCEL' in os.environ:
-                    chrome_path = os.environ.get('CHROME_PATH', '/opt/google/chrome/chrome')
-                    if os.path.exists(chrome_path):
-                        options.binary_location = chrome_path
-                
-                # Installation du ChromeDriver
-                chromedriver_path = chromedriver_autoinstaller.install()
-                service = Service(chromedriver_path)
-                
-                # Création du driver avec selenium-wire
-                self.driver = webdriver.Chrome(
-                    service=service,
-                    options=options,
-                    seleniumwire_options=chrome_options['seleniumwire_options']
-                )
-                
+                service = Service(ChromeDriverManager().install())
+                self.driver = webdriver.Chrome(service=service, options=self.options)
                 self.driver.set_page_load_timeout(30)
-                
-                # Configuration supplémentaire pour éviter la détection
-                self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {
-                    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                # Ajouter des variables JavaScript pour masquer l'automatisation
+                self.driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+                    'source': '''
+                        Object.defineProperty(navigator, 'webdriver', {
+                            get: () => undefined
+                        })
+                    '''
                 })
-                
-                # Vérification que le driver est bien initialisé
-                if not self.driver:
-                    raise Exception("Le driver n'a pas pu être initialisé correctement")
-                
             except Exception as e:
-                print(f"Erreur détaillée lors de l'initialisation du navigateur: {str(e)}")
-                if self.temp_dir and os.path.exists(self.temp_dir):
-                    shutil.rmtree(self.temp_dir, ignore_errors=True)
                 raise Exception(f"Erreur lors de l'initialisation du navigateur: {str(e)}")
 
     def _cleanup_driver(self):
@@ -112,21 +79,18 @@ class LetterboxdScraper:
                 pass
             finally:
                 self.driver = None
-                
-        if self.temp_dir and os.path.exists(self.temp_dir):
-            try:
-                shutil.rmtree(self.temp_dir, ignore_errors=True)
-            except Exception:
-                pass
 
     def _wait_and_scroll(self, retries=3, scroll_pause_time=2):
         for i in range(retries):
             try:
+                # Scroll progressif
                 last_height = self.driver.execute_script("return document.body.scrollHeight")
                 while True:
+                    # Scroll jusqu'en bas
                     self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                     time.sleep(scroll_pause_time)
                     
+                    # Calculer la nouvelle hauteur
                     new_height = self.driver.execute_script("return document.body.scrollHeight")
                     if new_height == last_height:
                         break
@@ -143,15 +107,19 @@ class LetterboxdScraper:
     def _extract_films_from_page(self):
         films = []
         try:
+            # Attendre que les films soient chargés
             time.sleep(3)
             
+            # Utiliser JavaScript pour extraire les films
             films_data = self.driver.execute_script("""
                 const films = [];
+                // Sélectionner tous les conteneurs de films possibles
                 const containers = document.querySelectorAll('.poster-container, .film-poster');
                 
                 containers.forEach(container => {
                     let link, img;
                     
+                    // Gérer les différentes structures possibles
                     if (container.classList.contains('film-poster')) {
                         link = container.closest('a');
                         img = container.querySelector('img');
@@ -173,6 +141,7 @@ class LetterboxdScraper:
             
             if not films_data:
                 print("Aucun film trouvé avec JavaScript, tentative avec Selenium...")
+                # Méthode alternative avec Selenium
                 selectors = ['.poster-container', '.film-poster']
                 for selector in selectors:
                     containers = self.driver.find_elements(By.CSS_SELECTOR, selector)
@@ -197,6 +166,7 @@ class LetterboxdScraper:
             else:
                 films = films_data
             
+            # Filtrer les entrées invalides et dédoublonner par titre
             seen_titles = set()
             unique_films = []
             for film in films:
@@ -218,6 +188,7 @@ class LetterboxdScraper:
                 self.driver.get(film_url)
                 time.sleep(3)
                 
+                # Récupérer les informations avec JavaScript
                 details = self.driver.execute_script("""
                     return {
                         director: document.querySelector('.film-director') ? 
@@ -257,7 +228,7 @@ class LetterboxdScraper:
             try:
                 print("Chargement de la page...")
                 self.driver.get(url)
-                time.sleep(5)
+                time.sleep(5)  # Attente plus longue pour le chargement initial
             except WebDriverException as e:
                 raise Exception(f"Impossible d'accéder à la page. Erreur: {str(e)}")
             
