@@ -6,3 +6,4 @@ python-dotenv==1.0.1
 flask-wtf==1.2.1
 requests==2.31.0
 gunicorn==21.2.0
+beautifulsoup4==4.12.3
