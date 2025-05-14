@@ -319,7 +319,7 @@ class LetterboxdScraper:
                                 if not poster_url or 'empty-poster' in poster_url:
                                     film_id = film_path.strip('/').split('/')[-1]
                                     # Utiliser l'URL directe de Letterboxd
-                                    poster_url = f"https://letterboxd.com/ajax/poster/film/{film_id}/std/300x450/"
+                                    poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/300/0-450-0-70-crop.jpg"
                             else:
                                 # Si pas d'image trouvée, utiliser une image par défaut
                                 poster_url = 'https://via.placeholder.com/300x450?text=Pas+d%27image'
@@ -445,9 +445,13 @@ class LetterboxdScraper:
                     if not films:
                         raise Exception("Aucun film trouvé dans cette liste.")
                     
+                    # Mélanger la liste des films pour une meilleure distribution aléatoire
+                    random.shuffle(films)
+                    
                     # Sélectionner un film aléatoire
                     chosen_film = random.choice(films)
                     print(f"\nFilm choisi: {chosen_film.get('name', 'Sans titre')}")
+                    print(f"Nombre total de films dans la liste: {len(films)}")
                     
                     # Récupérer les détails du film
                     film_url = urljoin(self.base_url, chosen_film.get('path', ''))
