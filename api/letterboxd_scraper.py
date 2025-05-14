@@ -329,8 +329,8 @@ class LetterboxdScraper:
                                 # Si pas d'URL ou poster vide, construire l'URL avec l'ID du film
                                 if not poster_url or 'empty-poster' in poster_url:
                                     film_id = film_path.strip('/').split('/')[-1]
-                                    # Utiliser l'URL directe du CDN de Letterboxd
-                                    poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
+                                    # Utiliser l'URL directe du CDN de Letterboxd avec un proxy
+                                    poster_url = f"/proxy-image?url=https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
                             else:
                                 # Si pas d'image trouvée, utiliser une image par défaut
                                 poster_url = 'https://via.placeholder.com/300x450?text=Pas+d%27image'
@@ -411,9 +411,12 @@ class LetterboxdScraper:
                 poster_url = poster_img.get('src', '') or poster_img.get('data-src', '')
                 if poster_url and poster_url.startswith('@'):
                     poster_url = poster_url[1:]
+                # Utiliser le proxy pour l'image
+                if poster_url and poster_url.startswith('http'):
+                    poster_url = f"/proxy-image?url={poster_url}"
             else:
-                # Si pas d'image trouvée, utiliser l'URL directe du CDN
-                poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
+                # Si pas d'image trouvée, utiliser l'URL directe du CDN avec proxy
+                poster_url = f"/proxy-image?url=https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
             
             return {
                 'title': title,
