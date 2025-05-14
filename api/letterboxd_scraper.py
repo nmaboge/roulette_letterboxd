@@ -344,6 +344,63 @@ class LetterboxdScraper:
             print(f"Erreur lors de l'appel à l'API: {str(e)}")
             return None
 
+    def _get_film_details(self, film_url):
+        """Récupère les détails d'un film depuis sa page."""
+        try:
+            print(f"\nRécupération des détails du film: {film_url}")
+            response = self.session.get(film_url, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html5lib')
+            
+            # Extraire les informations de base
+            title = soup.select_one('h1.headline-1')
+            title = title.text.strip() if title else "Sans titre"
+            
+            # Extraire l'année
+            year = ""
+            year_element = soup.select_one('a[href*="/films/year/"]')
+            if year_element:
+                year = year_element.text.strip()
+            
+            # Extraire le réalisateur
+            director = "Non disponible"
+            director_element = soup.select_one('a[href*="/director/"]')
+            if director_element:
+                director = director_element.text.strip()
+            
+            # Extraire la note
+            rating = "Non noté"
+            rating_element = soup.select_one('meta[name="twitter:data2"]')
+            if rating_element:
+                rating = rating_element.get('content', 'Non noté')
+            
+            # Extraire le synopsis
+            synopsis = "Synopsis non disponible"
+            synopsis_element = soup.select_one('div[class*="synopsis"]')
+            if synopsis_element:
+                synopsis = synopsis_element.text.strip()
+            
+            # Extraire l'URL du poster en haute qualité
+            poster_url = ""
+            poster_element = soup.select_one('div.poster img')
+            if poster_element:
+                poster_url = poster_element.get('src', '') or poster_element.get('data-src', '')
+                poster_url = self._improve_image_quality(poster_url)
+            
+            return {
+                'title': title,
+                'year': year,
+                'director': director,
+                'rating': rating,
+                'synopsis': synopsis,
+                'poster': poster_url
+            }
+            
+        except Exception as e:
+            print(f"Erreur lors de la récupération des détails du film: {str(e)}")
+            return None
+
     def get_films(self, url):
         """Récupère un film aléatoire depuis une liste Letterboxd."""
         try:
@@ -416,15 +473,30 @@ class LetterboxdScraper:
                         chosen_film = random.choice(films)
                         print(f"\nFilm choisi: {chosen_film.get('name', 'Sans titre')}")
                         
-                        return {
-                            'title': chosen_film.get('name', 'Sans titre'),
-                            'poster': chosen_film.get('image', ''),
-                            'url': urljoin(self.base_url, chosen_film.get('path', '')),
-                            'director': "Non disponible",
-                            'rating': "Non noté",
-                            'year': "",
-                            'synopsis': "Synopsis non disponible"
-                        }
+                        # Récupérer les détails du film
+                        film_url = urljoin(self.base_url, chosen_film.get('path', ''))
+                        film_details = self._get_film_details(film_url)
+                        
+                        if film_details:
+                            return {
+                                'title': film_details['title'],
+                                'poster': film_details['poster'] or chosen_film.get('image', ''),
+                                'url': film_url,
+                                'director': film_details['director'],
+                                'rating': film_details['rating'],
+                                'year': film_details['year'],
+                                'synopsis': film_details['synopsis']
+                            }
+                        else:
+                            return {
+                                'title': chosen_film.get('name', 'Sans titre'),
+                                'poster': chosen_film.get('image', ''),
+                                'url': film_url,
+                                'director': "Non disponible",
+                                'rating': "Non noté",
+                                'year': "",
+                                'synopsis': "Synopsis non disponible"
+                            }
             
             # Si l'API ne fonctionne pas, essayer la méthode HTML classique
             response = self.session.get(url, timeout=10)
@@ -450,16 +522,31 @@ class LetterboxdScraper:
             # Sélectionner un film aléatoire
             chosen_film = random.choice(films)
             print(f"\nFilm choisi: {chosen_film.get('name', 'Sans titre')}")
-
-            return {
-                'title': chosen_film.get('name', 'Sans titre'),
-                'poster': chosen_film.get('image', ''),
-                'url': urljoin(self.base_url, chosen_film.get('path', '')),
-                'director': "Non disponible",
-                'rating': "Non noté",
-                'year': "",
-                'synopsis': "Synopsis non disponible"
-            }
+            
+            # Récupérer les détails du film
+            film_url = urljoin(self.base_url, chosen_film.get('path', ''))
+            film_details = self._get_film_details(film_url)
+            
+            if film_details:
+                return {
+                    'title': film_details['title'],
+                    'poster': film_details['poster'] or chosen_film.get('image', ''),
+                    'url': film_url,
+                    'director': film_details['director'],
+                    'rating': film_details['rating'],
+                    'year': film_details['year'],
+                    'synopsis': film_details['synopsis']
+                }
+            else:
+                return {
+                    'title': chosen_film.get('name', 'Sans titre'),
+                    'poster': chosen_film.get('image', ''),
+                    'url': film_url,
+                    'director': "Non disponible",
+                    'rating': "Non noté",
+                    'year': "",
+                    'synopsis': "Synopsis non disponible"
+                }
 
         except requests.RequestException as e:
             print(f"\nErreur de requête: {str(e)}")
