@@ -329,8 +329,8 @@ class LetterboxdScraper:
                                 # Si pas d'URL ou poster vide, construire l'URL avec l'ID du film
                                 if not poster_url or 'empty-poster' in poster_url:
                                     film_id = film_path.strip('/').split('/')[-1]
-                                    # Utiliser l'URL directe du CDN de Letterboxd avec un proxy
-                                    poster_url = f"/proxy-image?url=https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
+                                    # Utiliser l'API AJAX de Letterboxd
+                                    poster_url = f"https://letterboxd.com/ajax/poster/film/{film_id}/std/300x450/"
                             else:
                                 # Si pas d'image trouvée, utiliser une image par défaut
                                 poster_url = 'https://via.placeholder.com/300x450?text=Pas+d%27image'
@@ -405,18 +405,8 @@ class LetterboxdScraper:
             # Extraire l'ID du film et construire l'URL du poster
             film_id = film_url.strip('/').split('/')[-1]
             
-            # Essayer d'abord de récupérer l'URL de l'image depuis la page
-            poster_img = soup.select_one('img.poster')
-            if poster_img:
-                poster_url = poster_img.get('src', '') or poster_img.get('data-src', '')
-                if poster_url and poster_url.startswith('@'):
-                    poster_url = poster_url[1:]
-                # Utiliser le proxy pour l'image
-                if poster_url and poster_url.startswith('http'):
-                    poster_url = f"/proxy-image?url={poster_url}"
-            else:
-                # Si pas d'image trouvée, utiliser l'URL directe du CDN avec proxy
-                poster_url = f"/proxy-image?url=https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
+            # Utiliser l'API AJAX de Letterboxd pour le poster
+            poster_url = f"https://letterboxd.com/ajax/poster/film/{film_id}/std/300x450/"
             
             return {
                 'title': title,

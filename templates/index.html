@@ -154,39 +154,20 @@
                     const filmId = data.url.split('/').filter(Boolean).pop();
                     console.log('Film ID:', filmId);
                     
-                    // Construire l'URL de l'image
-                    const imageUrl = `https://a.ltrbxd.com/resized/film-poster/${filmId}/0/500/0-750-0-70-crop.jpg`;
+                    // Construire l'URL de l'image via l'API AJAX
+                    const imageUrl = `https://letterboxd.com/ajax/poster/film/${filmId}/std/300x450/`;
                     console.log('Tentative de chargement de l\'image:', imageUrl);
                     
-                    // Essayer directement de charger l'image
+                    // Essayer de charger l'image
                     posterElement.src = imageUrl;
                     posterElement.alt = data.title;
                     
                     // Gérer les erreurs de chargement
                     posterElement.onerror = function() {
-                        console.log('Erreur de chargement de l\'image haute résolution');
-                        
-                        // Essayer une taille plus petite
-                        const smallImageUrl = `https://a.ltrbxd.com/resized/film-poster/${filmId}/0/300/0-450-0-70-crop.jpg`;
-                        console.log('Tentative avec une taille plus petite:', smallImageUrl);
-                        
-                        this.src = smallImageUrl;
-                        
-                        // Si la petite taille ne fonctionne pas non plus
-                        this.onerror = function() {
-                            console.log('Erreur de chargement de l\'image basse résolution');
-                            
-                            // Essayer l'URL originale fournie par l'API
-                            if (data.poster && !data.poster.startsWith('/proxy-image')) {
-                                console.log('Tentative avec l\'URL originale:', data.poster);
-                                this.src = data.poster;
-                            } else {
-                                console.log('Toutes les tentatives ont échoué');
-                                this.src = 'https://via.placeholder.com/300x450?text=Pas+d%27image';
-                                this.alt = 'Poster non disponible';
-                                this.onerror = null;
-                            }
-                        };
+                        console.log('Erreur de chargement de l\'image');
+                        this.src = 'https://via.placeholder.com/300x450?text=Pas+d%27image';
+                        this.alt = 'Poster non disponible';
+                        this.onerror = null;
                     };
                     
                     // Gérer le chargement réussi
