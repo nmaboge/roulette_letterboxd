@@ -7,6 +7,7 @@ import json
 import re
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import os
 
 class LetterboxdScraper:
     def __init__(self):
@@ -20,6 +21,7 @@ class LetterboxdScraper:
             'Connection': 'keep-alive'
         }
         self.base_url = "https://letterboxd.com"
+        self.tmdb_api_key = os.environ.get('TMDB_API_KEY', '8c247ea0b4b56ed2ff7d41c9a833aa77')  # Clé API publique TMDB
         self.session = requests.Session()
         
         # Configure retry strategy
@@ -371,6 +373,35 @@ class LetterboxdScraper:
             print(f"Erreur lors de l'appel à l'API: {str(e)}")
             return None
 
+    def _get_tmdb_poster(self, title, year=None):
+        """Récupère le poster d'un film depuis TMDB."""
+        try:
+            # Rechercher le film sur TMDB
+            search_url = f"https://api.themoviedb.org/3/search/movie"
+            params = {
+                'api_key': self.tmdb_api_key,
+                'query': title,
+                'language': 'fr-FR'
+            }
+            if year:
+                params['year'] = year
+
+            response = self.session.get(search_url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            if data['results']:
+                # Prendre le premier résultat
+                movie = data['results'][0]
+                if movie.get('poster_path'):
+                    # Construire l'URL du poster
+                    return f"https://image.tmdb.org/t/p/w500{movie['poster_path']}"
+            
+            return None
+        except Exception as e:
+            print(f"Erreur lors de la récupération du poster TMDB: {str(e)}")
+            return None
+
     def _get_film_details(self, film_url):
         """Récupère les détails d'un film depuis sa page."""
         try:
@@ -402,11 +433,11 @@ class LetterboxdScraper:
             if rating_element:
                 rating = rating_element.get('content', 'Non noté')
             
-            # Extraire l'ID du film et construire l'URL du poster
-            film_id = film_url.strip('/').split('/')[-1]
-            
-            # Utiliser l'API AJAX de Letterboxd pour le poster
-            poster_url = f"https://letterboxd.com/ajax/poster/film/{film_id}/std/300x450/"
+            # Récupérer le poster depuis TMDB
+            poster_url = self._get_tmdb_poster(title, year)
+            if not poster_url:
+                # Si pas de poster TMDB, utiliser une image par défaut
+                poster_url = 'https://via.placeholder.com/300x450?text=Pas+d%27image'
             
             return {
                 'title': title,

@@ -150,16 +150,7 @@
                 // Poster
                 const posterElement = document.getElementById('moviePoster');
                 if (data.poster) {
-                    // Extraire l'ID du film de l'URL
-                    const filmId = data.url.split('/').filter(Boolean).pop();
-                    console.log('Film ID:', filmId);
-                    
-                    // Construire l'URL de l'image via l'API AJAX
-                    const imageUrl = `https://letterboxd.com/ajax/poster/film/${filmId}/std/300x450/`;
-                    console.log('Tentative de chargement de l\'image:', imageUrl);
-                    
-                    // Essayer de charger l'image
-                    posterElement.src = imageUrl;
+                    posterElement.src = data.poster;
                     posterElement.alt = data.title;
                     
                     // Gérer les erreurs de chargement
@@ -169,13 +160,7 @@
                         this.alt = 'Poster non disponible';
                         this.onerror = null;
                     };
-                    
-                    // Gérer le chargement réussi
-                    posterElement.onload = function() {
-                        console.log('Image chargée avec succès');
-                    };
                 } else {
-                    console.log('Pas d\'URL d\'image fournie');
                     posterElement.src = 'https://via.placeholder.com/300x450?text=Pas+d%27image';
                     posterElement.alt = 'Poster non disponible';
                 }
