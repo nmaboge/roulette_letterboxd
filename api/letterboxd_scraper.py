@@ -377,30 +377,35 @@ class LetterboxdScraper:
             
             # Extraire l'URL du poster en haute qualité
             poster_url = ""
+            film_id = film_url.strip('/').split('/')[-1]
+            
             # Essayer plusieurs sélecteurs pour trouver l'image
             poster_selectors = [
                 'div.poster img',
                 'div.film-poster img',
                 'img[src*="film-poster"]',
-                'img[data-src*="film-poster"]'
+                'img[data-src*="film-poster"]',
+                'meta[property="og:image"]'
             ]
             
             for selector in poster_selectors:
-                poster_element = soup.select_one(selector)
-                if poster_element:
-                    poster_url = poster_element.get('src', '') or poster_element.get('data-src', '')
-                    if poster_url:
-                        # Construire l'URL en haute qualité
-                        if 'film-poster' in poster_url:
-                            # Extraire l'ID du film de l'URL
+                element = soup.select_one(selector)
+                if element:
+                    if selector == 'meta[property="og:image"]':
+                        poster_url = element.get('content', '')
+                    else:
+                        poster_url = element.get('src', '') or element.get('data-src', '')
+                    
+                    if poster_url and 'film-poster' in poster_url:
+                        # Extraire l'ID du film de l'URL
+                        try:
                             film_id = poster_url.split('/')[-2]
-                            poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
+                        except:
+                            pass
                         break
             
-            # Si aucune image n'est trouvée, essayer de construire l'URL à partir du titre
-            if not poster_url:
-                film_slug = film_url.strip('/').split('/')[-1]
-                poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_slug}/0/500/0-750-0-70-crop.jpg"
+            # Construire l'URL en haute qualité
+            poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
             
             return {
                 'title': title,

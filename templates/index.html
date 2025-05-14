@@ -79,8 +79,6 @@
                                     <span id="movieDirector" class="text-lg"></span>
                                 </div>
                                 
-                                <p id="movieSynopsis" class="text-gray-300 mt-4"></p>
-                                
                                 <a id="movieLink" href="" target="_blank" 
                                    class="inline-block mt-4 bg-letterboxd hover:bg-pink-600 text-white font-bold py-2 px-4 rounded transition duration-200">
                                     <i class="fas fa-external-link-alt mr-2"></i>
@@ -153,6 +151,11 @@
                 if (data.poster) {
                     posterElement.src = data.poster;
                     posterElement.alt = data.title;
+                    posterElement.onerror = function() {
+                        // Si l'image ne se charge pas, essayer une autre URL
+                        const filmId = data.url.split('/').filter(Boolean).pop();
+                        this.src = `https://a.ltrbxd.com/resized/film-poster/${filmId}/0/500/0-750-0-70-crop.jpg`;
+                    };
                 } else {
                     posterElement.src = 'https://via.placeholder.com/300x450?text=Pas+d%27image';
                     posterElement.alt = 'Poster non disponible';
@@ -162,7 +165,6 @@
                 document.getElementById('movieYear').textContent = data.year || 'Année inconnue';
                 document.getElementById('movieRating').textContent = data.rating || 'Pas encore noté';
                 document.getElementById('movieDirector').textContent = data.director || 'Réalisateur inconnu';
-                document.getElementById('movieSynopsis').textContent = data.synopsis || 'Pas de synopsis disponible';
                 document.getElementById('movieLink').href = data.url || '#';
                 
                 resultDiv.classList.remove('hidden');
