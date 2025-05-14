@@ -174,18 +174,9 @@ class LetterboxdScraper:
                         # Nettoyer le titre
                         title = title.replace('-', ' ').title()
                         
-                        # Extraire l'URL du poster
-                        img = element.select_one('img')
-                        if img:
-                            poster_url = img.get('src', '') or img.get('data-src', '')
-                            if 'empty-poster' in poster_url:
-                                film_id = film_path.strip('/').split('/')[-1]
-                                poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
-                        else:
-                            poster_url = ''
-                        
-                        # Améliorer la qualité de l'image
-                        poster_url = self._improve_image_quality(poster_url)
+                        # Extraire l'ID du film et construire l'URL du poster
+                        film_id = film_path.strip('/').split('/')[-1]
+                        poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
                         
                         film_data = {
                             'name': title or 'Sans titre',
@@ -375,37 +366,19 @@ class LetterboxdScraper:
             if rating_element:
                 rating = rating_element.get('content', 'Non noté')
             
-            # Extraire l'URL du poster en haute qualité
-            poster_url = ""
+            # Extraire l'ID du film et construire l'URL du poster
             film_id = film_url.strip('/').split('/')[-1]
-            
-            # Essayer plusieurs sélecteurs pour trouver l'image
-            poster_selectors = [
-                'div.poster img',
-                'div.film-poster img',
-                'img[src*="film-poster"]',
-                'img[data-src*="film-poster"]',
-                'meta[property="og:image"]'
-            ]
-            
-            for selector in poster_selectors:
-                element = soup.select_one(selector)
-                if element:
-                    if selector == 'meta[property="og:image"]':
-                        poster_url = element.get('content', '')
-                    else:
-                        poster_url = element.get('src', '') or element.get('data-src', '')
-                    
-                    if poster_url and 'film-poster' in poster_url:
-                        # Extraire l'ID du film de l'URL
-                        try:
-                            film_id = poster_url.split('/')[-2]
-                        except:
-                            pass
-                        break
-            
-            # Construire l'URL en haute qualité
             poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
+            
+            # Vérifier si l'image existe
+            try:
+                img_response = self.session.head(poster_url, timeout=5)
+                if img_response.status_code != 200:
+                    # Essayer une autre taille si la première ne fonctionne pas
+                    poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/300/0-450-0-70-crop.jpg"
+            except:
+                # En cas d'erreur, utiliser une taille plus petite
+                poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/300/0-450-0-70-crop.jpg"
             
             return {
                 'title': title,

@@ -149,12 +149,33 @@
                 // Poster
                 const posterElement = document.getElementById('moviePoster');
                 if (data.poster) {
+                    // Fonction pour essayer différentes tailles d'image
+                    const tryImageSize = (size) => {
+                        const filmId = data.url.split('/').filter(Boolean).pop();
+                        return `https://a.ltrbxd.com/resized/film-poster/${filmId}/0/${size}/0-${size * 1.5}-0-70-crop.jpg`;
+                    };
+
+                    // Essayer d'abord l'URL fournie
                     posterElement.src = data.poster;
                     posterElement.alt = data.title;
+
+                    // Si l'image ne se charge pas, essayer différentes tailles
                     posterElement.onerror = function() {
-                        // Si l'image ne se charge pas, essayer une autre URL
-                        const filmId = data.url.split('/').filter(Boolean).pop();
-                        this.src = `https://a.ltrbxd.com/resized/film-poster/${filmId}/0/500/0-750-0-70-crop.jpg`;
+                        const sizes = [500, 300, 200];
+                        let currentSizeIndex = 0;
+
+                        const tryNextSize = () => {
+                            if (currentSizeIndex < sizes.length) {
+                                this.src = tryImageSize(sizes[currentSizeIndex]);
+                                currentSizeIndex++;
+                            } else {
+                                // Si aucune taille ne fonctionne, utiliser l'image par défaut
+                                this.src = 'https://via.placeholder.com/300x450?text=Pas+d%27image';
+                                this.onerror = null; // Arrêter les tentatives
+                            }
+                        };
+
+                        tryNextSize();
                     };
                 } else {
                     posterElement.src = 'https://via.placeholder.com/300x450?text=Pas+d%27image';
