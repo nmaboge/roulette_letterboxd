@@ -375,25 +375,38 @@ class LetterboxdScraper:
             if rating_element:
                 rating = rating_element.get('content', 'Non noté')
             
-            # Extraire le synopsis
-            synopsis = "Synopsis non disponible"
-            synopsis_element = soup.select_one('div[class*="synopsis"]')
-            if synopsis_element:
-                synopsis = synopsis_element.text.strip()
-            
             # Extraire l'URL du poster en haute qualité
             poster_url = ""
-            poster_element = soup.select_one('div.poster img')
-            if poster_element:
-                poster_url = poster_element.get('src', '') or poster_element.get('data-src', '')
-                poster_url = self._improve_image_quality(poster_url)
+            # Essayer plusieurs sélecteurs pour trouver l'image
+            poster_selectors = [
+                'div.poster img',
+                'div.film-poster img',
+                'img[src*="film-poster"]',
+                'img[data-src*="film-poster"]'
+            ]
+            
+            for selector in poster_selectors:
+                poster_element = soup.select_one(selector)
+                if poster_element:
+                    poster_url = poster_element.get('src', '') or poster_element.get('data-src', '')
+                    if poster_url:
+                        # Construire l'URL en haute qualité
+                        if 'film-poster' in poster_url:
+                            # Extraire l'ID du film de l'URL
+                            film_id = poster_url.split('/')[-2]
+                            poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
+                        break
+            
+            # Si aucune image n'est trouvée, essayer de construire l'URL à partir du titre
+            if not poster_url:
+                film_slug = film_url.strip('/').split('/')[-1]
+                poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_slug}/0/500/0-750-0-70-crop.jpg"
             
             return {
                 'title': title,
                 'year': year,
                 'director': director,
                 'rating': rating,
-                'synopsis': synopsis,
                 'poster': poster_url
             }
             
@@ -484,8 +497,7 @@ class LetterboxdScraper:
                                 'url': film_url,
                                 'director': film_details['director'],
                                 'rating': film_details['rating'],
-                                'year': film_details['year'],
-                                'synopsis': film_details['synopsis']
+                                'year': film_details['year']
                             }
                         else:
                             return {
@@ -494,8 +506,7 @@ class LetterboxdScraper:
                                 'url': film_url,
                                 'director': "Non disponible",
                                 'rating': "Non noté",
-                                'year': "",
-                                'synopsis': "Synopsis non disponible"
+                                'year': ""
                             }
             
             # Si l'API ne fonctionne pas, essayer la méthode HTML classique
@@ -534,8 +545,7 @@ class LetterboxdScraper:
                     'url': film_url,
                     'director': film_details['director'],
                     'rating': film_details['rating'],
-                    'year': film_details['year'],
-                    'synopsis': film_details['synopsis']
+                    'year': film_details['year']
                 }
             else:
                 return {
@@ -544,8 +554,7 @@ class LetterboxdScraper:
                     'url': film_url,
                     'director': "Non disponible",
                     'rating': "Non noté",
-                    'year': "",
-                    'synopsis': "Synopsis non disponible"
+                    'year': ""
                 }
 
         except requests.RequestException as e:
