@@ -3,13 +3,12 @@ from .letterboxd_scraper import LetterboxdScraper
 from flask_wtf import CSRFProtect
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, 
+    static_folder=os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static')),
+    template_folder=os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates'))
+)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24))
 csrf = CSRFProtect(app)
-
-# Configuration des templates pour Vercel
-template_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates'))
-app.template_folder = template_dir
 
 @app.route('/')
 def index():
