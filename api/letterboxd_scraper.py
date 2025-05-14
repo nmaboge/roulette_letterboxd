@@ -318,29 +318,8 @@ class LetterboxdScraper:
                                 # Si pas d'URL ou poster vide, construire l'URL avec l'ID du film
                                 if not poster_url or 'empty-poster' in poster_url:
                                     film_id = film_path.strip('/').split('/')[-1]
-                                    # Essayer différentes tailles d'image
-                                    sizes = [
-                                        (500, 750),  # Taille standard
-                                        (300, 450),  # Taille moyenne
-                                        (200, 300)   # Taille petite
-                                    ]
-                                    
-                                    # Construire l'URL avec la première taille
-                                    poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/{sizes[0][0]}/0-{sizes[0][1]}-0-70-crop.jpg"
-                                    
-                                    # Vérifier si l'image existe
-                                    try:
-                                        img_response = self.session.head(poster_url, timeout=5)
-                                        if img_response.status_code != 200:
-                                            # Essayer la taille moyenne
-                                            poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/{sizes[1][0]}/0-{sizes[1][1]}-0-70-crop.jpg"
-                                            img_response = self.session.head(poster_url, timeout=5)
-                                            if img_response.status_code != 200:
-                                                # Essayer la taille petite
-                                                poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/{sizes[2][0]}/0-{sizes[2][1]}-0-70-crop.jpg"
-                                    except:
-                                        # En cas d'erreur, utiliser la taille moyenne
-                                        poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/{sizes[1][0]}/0-{sizes[1][1]}-0-70-crop.jpg"
+                                    # Utiliser directement la taille moyenne qui est la plus fiable
+                                    poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/300/0-450-0-70-crop.jpg"
                             else:
                                 # Si pas d'image trouvée, utiliser une image par défaut
                                 poster_url = 'https://via.placeholder.com/300x450?text=Pas+d%27image'
