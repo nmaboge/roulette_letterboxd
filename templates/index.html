@@ -177,16 +177,15 @@
                             console.log('Erreur de chargement de l\'image basse résolution');
                             
                             // Essayer l'URL originale fournie par l'API
-                            console.log('Tentative avec l\'URL originale:', data.poster);
-                            this.src = data.poster;
-                            
-                            // Si rien ne fonctionne
-                            this.onerror = function() {
+                            if (data.poster && !data.poster.startsWith('/proxy-image')) {
+                                console.log('Tentative avec l\'URL originale:', data.poster);
+                                this.src = data.poster;
+                            } else {
                                 console.log('Toutes les tentatives ont échoué');
                                 this.src = 'https://via.placeholder.com/300x450?text=Pas+d%27image';
                                 this.alt = 'Poster non disponible';
                                 this.onerror = null;
-                            };
+                            }
                         };
                     };
                     

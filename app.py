@@ -1,8 +1,9 @@
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, send_file
 from letterboxd_scraper import LetterboxdScraper
 from flask_wtf import CSRFProtect
 import os
 import requests
+from io import BytesIO
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24))
@@ -52,16 +53,19 @@ def proxy_image():
         response = requests.get(image_url, stream=True)
         response.raise_for_status()
 
+        # Créer un objet BytesIO pour stocker l'image
+        img_io = BytesIO(response.content)
+        img_io.seek(0)
+
         # Retourner l'image avec les bons headers
-        return Response(
-            response.iter_content(chunk_size=1024),
-            content_type=response.headers['Content-Type'],
-            headers={
-                'Cache-Control': 'public, max-age=31536000',
-                'Access-Control-Allow-Origin': '*'
-            }
+        return send_file(
+            img_io,
+            mimetype=response.headers['Content-Type'],
+            as_attachment=False,
+            download_name='poster.jpg'
         )
     except Exception as e:
+        print(f"Erreur proxy-image: {str(e)}")
         return jsonify({'error': f'Erreur lors de la récupération de l\'image: {str(e)}'}), 500
 
 # Pour les environnements de développement
