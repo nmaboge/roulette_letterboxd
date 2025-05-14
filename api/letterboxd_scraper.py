@@ -258,6 +258,7 @@ class LetterboxdScraper:
             all_films = []
             page = 1
             has_more_pages = True
+            seen_films = set()  # Pour éviter les doublons
 
             while has_more_pages:
                 # Construire l'URL de la page
@@ -302,6 +303,12 @@ class LetterboxdScraper:
                             if not film_path:
                                 continue
                             
+                            # Vérifier si nous avons déjà vu ce film
+                            if film_path in seen_films:
+                                continue
+                            
+                            seen_films.add(film_path)
+                            
                             # Extraire le titre
                             title = container.get('data-film-name', '')
                             if not title:
@@ -312,20 +319,12 @@ class LetterboxdScraper:
                             # Extraire l'URL du poster
                             img = container.select_one('img')
                             if img:
-                                # Essayer d'abord les attributs standards
                                 poster_url = img.get('src', '') or img.get('data-src', '')
-                                
-                                # Si pas d'URL ou poster vide, construire l'URL avec l'ID du film
-                                if not poster_url or 'empty-poster' in poster_url:
+                                if 'empty-poster' in poster_url:
                                     film_id = film_path.strip('/').split('/')[-1]
-                                    # Utiliser l'URL directe de Letterboxd
                                     poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/300/0-450-0-70-crop.jpg"
                             else:
-                                # Si pas d'image trouvée, utiliser une image par défaut
-                                poster_url = 'https://via.placeholder.com/300x450?text=Pas+d%27image'
-                            
-                            # Améliorer la qualité de l'image
-                            poster_url = self._improve_image_quality(poster_url)
+                                poster_url = ''
                             
                             film_data = {
                                 'name': title or 'Sans titre',
@@ -333,37 +332,28 @@ class LetterboxdScraper:
                                 'image': poster_url
                             }
                             
-                            if film_data not in all_films:
-                                all_films.append(film_data)
-                                print(f"Film trouvé: {film_data['name']}")
+                            all_films.append(film_data)
+                            print(f"Film trouvé: {film_data['name']}")
                             
                         except Exception as e:
                             print(f"Erreur lors de l'extraction d'un film: {str(e)}")
                             continue
                     
                     # Vérifier s'il y a une page suivante
-                    # Vérifier si nous sommes sur la dernière page
-                    pagination = soup.select_one('.paginate-pages')
-                    if pagination:
-                        current_page = pagination.select_one('.paginate-current')
-                        if current_page:
-                            current_page_num = int(current_page.text.strip())
-                            # Si nous sommes sur la dernière page ou si la page suivante n'existe pas
-                            if current_page_num >= page:
-                                has_more_pages = False
-                            else:
-                                page += 1
-                                # Ajouter un petit délai pour éviter de surcharger le serveur
-                                time.sleep(0.5)
-                    else:
-                        # Si pas de pagination, c'est probablement la dernière page
+                    next_page = soup.select_one('a.next')
+                    if not next_page:
                         has_more_pages = False
-                
+                    else:
+                        page += 1
+                        # Ajouter un petit délai pour éviter de surcharger le serveur
+                        time.sleep(0.5)
+                    
                 except Exception as e:
                     print(f"Erreur lors de la récupération de la page {page}: {str(e)}")
                     has_more_pages = False
             
             if all_films:
+                print(f"\nNombre total de films uniques trouvés: {len(all_films)}")
                 return {'films': all_films}
             
             return None
