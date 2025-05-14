@@ -383,11 +383,17 @@ class LetterboxdScraper:
                                         continue
                                 
                                 # Vérifier s'il y a une page suivante
-                                next_page = soup.select_one('a.next')
-                                if not next_page:
+                                # Si nous avons moins de films que le nombre par page, c'est la dernière page
+                                if len(film_elements) < int(params['perPage']):
                                     has_more_pages = False
                                 else:
-                                    page += 1
+                                    # Vérifier si nous avons atteint la limite de pages (généralement 100 pages)
+                                    if page >= 100:
+                                        has_more_pages = False
+                                    else:
+                                        page += 1
+                                        # Ajouter un petit délai pour éviter de surcharger le serveur
+                                        time.sleep(0.5)
                             else:
                                 has_more_pages = False
                         else:
