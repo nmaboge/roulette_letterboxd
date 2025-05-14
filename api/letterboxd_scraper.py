@@ -319,12 +319,17 @@ class LetterboxdScraper:
                             # Extraire l'URL du poster
                             img = container.select_one('img')
                             if img:
+                                # Essayer d'abord les attributs standards
                                 poster_url = img.get('src', '') or img.get('data-src', '')
-                                if 'empty-poster' in poster_url:
+                                
+                                # Si pas d'URL ou poster vide, construire l'URL avec l'ID du film
+                                if not poster_url or 'empty-poster' in poster_url:
                                     film_id = film_path.strip('/').split('/')[-1]
-                                    poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/300/0-450-0-70-crop.jpg"
+                                    # Utiliser l'URL directe de Letterboxd
+                                    poster_url = f"https://letterboxd.com/ajax/poster/film/{film_id}/std/300x450/"
                             else:
-                                poster_url = ''
+                                # Si pas d'image trouvée, utiliser une image par défaut
+                                poster_url = 'https://via.placeholder.com/300x450?text=Pas+d%27image'
                             
                             film_data = {
                                 'name': title or 'Sans titre',
