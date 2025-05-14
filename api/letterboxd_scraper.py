@@ -363,14 +363,23 @@ class LetterboxdScraper:
                             continue
                     
                     # Vérifier s'il y a une page suivante
-                    next_page = soup.select_one('a.next')
-                    if not next_page:
-                        has_more_pages = False
+                    # Vérifier si nous sommes sur la dernière page
+                    pagination = soup.select_one('.paginate-pages')
+                    if pagination:
+                        current_page = pagination.select_one('.paginate-current')
+                        if current_page:
+                            current_page_num = int(current_page.text.strip())
+                            # Si nous sommes sur la dernière page ou si la page suivante n'existe pas
+                            if current_page_num >= page:
+                                has_more_pages = False
+                            else:
+                                page += 1
+                                # Ajouter un petit délai pour éviter de surcharger le serveur
+                                time.sleep(0.5)
                     else:
-                        page += 1
-                        # Ajouter un petit délai pour éviter de surcharger le serveur
-                        time.sleep(0.5)
-                    
+                        # Si pas de pagination, c'est probablement la dernière page
+                        has_more_pages = False
+                
                 except Exception as e:
                     print(f"Erreur lors de la récupération de la page {page}: {str(e)}")
                     has_more_pages = False
