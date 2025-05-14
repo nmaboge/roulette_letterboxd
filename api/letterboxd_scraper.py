@@ -246,169 +246,114 @@ class LetterboxdScraper:
     def _get_films_from_api(self, username, list_type):
         """Tente de récupérer les films via l'API AJAX de Letterboxd."""
         try:
-            # Construire les différentes variantes d'URL à essayer
-            url_variants = []
+            # Construire l'URL de base
+            base_url = f"https://letterboxd.com/{username}/"
             if list_type == 'watchlist':
-                url_variants = [
-                    f"https://letterboxd.com/{username}/watchlist/",
-                    f"https://letterboxd.com/{username}/watchlist/by/name/",
-                    f"https://letterboxd.com/{username}/watchlist/by/added/",
-                    f"https://letterboxd.com/{username}/watchlist/size/small/"
-                ]
+                base_url += "watchlist/"
             elif list_type == 'films':
-                url_variants = [
-                    f"https://letterboxd.com/{username}/films/",
-                    f"https://letterboxd.com/{username}/films/by/name/",
-                    f"https://letterboxd.com/{username}/films/size/small/"
-                ]
+                base_url += "films/"
             else:
                 return None
-
-            # Paramètres de requête
-            params = {
-                'perPage': '100',
-                'sort': 'name',
-                'layout': 'grid',
-                'includeSpoilers': 'false',
-                'includeReviews': 'false',
-                'ajax': 'true'
-            }
-
-            # En-têtes spécifiques pour l'API
-            api_headers = {
-                **self.headers,
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'text/html, */*; q=0.01',
-                'X-AJAX': 'true',
-                'X-AJAX-Referer': url_variants[0]
-            }
 
             all_films = []
             page = 1
             has_more_pages = True
 
-            # Essayer chaque variante d'URL
-            for api_url in url_variants:
+            while has_more_pages:
+                # Construire l'URL de la page
+                page_url = f"{base_url}page/{page}/" if page > 1 else base_url
+                print(f"\nRécupération de la page {page}: {page_url}")
+                
                 try:
-                    print(f"\nTentative avec l'URL: {api_url}")
+                    # Faire la requête
+                    response = self.session.get(page_url, timeout=10)
+                    response.raise_for_status()
                     
-                    # Première requête pour obtenir le CSRF token
-                    init_response = self.session.get(api_url, headers=self.headers)
-                    init_response.raise_for_status()
+                    # Vérifier l'accessibilité de la page
+                    self._check_page_accessibility(response)
                     
-                    # Extraire le CSRF token
-                    csrf_token = None
-                    for cookie in self.session.cookies:
-                        if cookie.name == 'com.xk72.webparts.csrf':
-                            csrf_token = cookie.value
-                            break
+                    # Parser le HTML
+                    soup = BeautifulSoup(response.text, 'html5lib')
                     
-                    if csrf_token:
-                        api_headers['X-CSRF-Token'] = csrf_token
-                        print("CSRF Token trouvé et ajouté aux en-têtes")
+                    # Trouver tous les films sur la page
+                    film_elements = soup.select('li.poster-container')
                     
-                    # Parcourir toutes les pages
-                    while has_more_pages:
-                        params['page'] = page
-                        print(f"\nRécupération de la page {page}...")
-                        
-                        # Faire la requête AJAX
-                        response = self.session.get(
-                            api_url,
-                            headers=api_headers,
-                            params=params,
-                            timeout=10
-                        )
-                        response.raise_for_status()
-                        
-                        print(f"Statut: {response.status_code}")
-                        print(f"Type de contenu: {response.headers.get('Content-Type')}")
-                        
-                        # Vérifier si nous avons du contenu HTML valide
-                        if response.text and '<' in response.text:
-                            soup = BeautifulSoup(response.text, 'html5lib')
-                            film_elements = soup.select('li.poster-container')
+                    if not film_elements:
+                        print("Aucun film trouvé sur cette page")
+                        has_more_pages = False
+                        continue
+                    
+                    print(f"Films trouvés sur la page {page}: {len(film_elements)}")
+                    
+                    # Extraire les informations de chaque film
+                    for container in film_elements:
+                        try:
+                            film_link = container.select_one('div.film-poster')
+                            if not film_link:
+                                continue
                             
-                            if film_elements:
-                                print(f"Films trouvés sur la page {page}: {len(film_elements)}")
-                                
-                                for container in film_elements:
-                                    try:
-                                        film_link = container.select_one('div.film-poster')
-                                        if not film_link:
-                                            continue
-                                        
-                                        # Extraire l'URL du film
-                                        film_path = film_link.get('data-target-link', '')
-                                        if not film_path:
-                                            link_element = container.select_one('a')
-                                            if link_element:
-                                                film_path = link_element.get('href', '')
-                                        
-                                        if not film_path:
-                                            continue
-                                        
-                                        # Extraire le titre et l'année
-                                        title = container.get('data-film-name', '')
-                                        if not title:
-                                            img = container.select_one('img')
-                                            if img:
-                                                title = img.get('alt', '')
-                                        
-                                        # Extraire l'URL du poster
-                                        img = container.select_one('img')
-                                        if img:
-                                            poster_url = img.get('src', '') or img.get('data-src', '')
-                                            if 'empty-poster' in poster_url:
-                                                film_id = film_path.strip('/').split('/')[-1]
-                                                poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
-                                        else:
-                                            poster_url = ''
-                                        
-                                        # Améliorer la qualité de l'image
-                                        poster_url = self._improve_image_quality(poster_url)
-                                        
-                                        film_data = {
-                                            'name': title or 'Sans titre',
-                                            'path': film_path,
-                                            'image': poster_url
-                                        }
-                                        
-                                        if film_data not in all_films:
-                                            all_films.append(film_data)
-                                            print(f"Film trouvé via API: {film_data['name']}")
-                                        
-                                    except Exception as e:
-                                        print(f"Erreur lors de l'extraction d'un film via API: {str(e)}")
-                                        continue
-                                
-                                # Vérifier s'il y a une page suivante
-                                # Si nous avons moins de films que le nombre par page, c'est la dernière page
-                                if len(film_elements) < int(params['perPage']):
-                                    has_more_pages = False
-                                else:
-                                    # Vérifier si nous avons atteint la limite de pages (généralement 100 pages)
-                                    if page >= 100:
-                                        has_more_pages = False
-                                    else:
-                                        page += 1
-                                        # Ajouter un petit délai pour éviter de surcharger le serveur
-                                        time.sleep(0.5)
+                            # Extraire l'URL du film
+                            film_path = film_link.get('data-target-link', '')
+                            if not film_path:
+                                link_element = container.select_one('a')
+                                if link_element:
+                                    film_path = link_element.get('href', '')
+                            
+                            if not film_path:
+                                continue
+                            
+                            # Extraire le titre
+                            title = container.get('data-film-name', '')
+                            if not title:
+                                img = container.select_one('img')
+                                if img:
+                                    title = img.get('alt', '')
+                            
+                            # Extraire l'URL du poster
+                            img = container.select_one('img')
+                            if img:
+                                poster_url = img.get('src', '') or img.get('data-src', '')
+                                if 'empty-poster' in poster_url:
+                                    film_id = film_path.strip('/').split('/')[-1]
+                                    poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
                             else:
-                                has_more_pages = False
-                        else:
-                            has_more_pages = False
+                                poster_url = ''
+                            
+                            # Améliorer la qualité de l'image
+                            poster_url = self._improve_image_quality(poster_url)
+                            
+                            film_data = {
+                                'name': title or 'Sans titre',
+                                'path': film_path,
+                                'image': poster_url
+                            }
+                            
+                            if film_data not in all_films:
+                                all_films.append(film_data)
+                                print(f"Film trouvé: {film_data['name']}")
+                            
+                        except Exception as e:
+                            print(f"Erreur lors de l'extraction d'un film: {str(e)}")
+                            continue
                     
-                    if all_films:
-                        return {'content': response.text, 'films': all_films}
+                    # Vérifier s'il y a une page suivante
+                    next_page = soup.select_one('a.next')
+                    if not next_page:
+                        has_more_pages = False
+                    else:
+                        page += 1
+                        # Ajouter un petit délai pour éviter de surcharger le serveur
+                        time.sleep(0.5)
                     
                 except Exception as e:
-                    print(f"Échec pour {api_url}: {str(e)}")
-                    continue
-
-            print("Aucune variante d'URL n'a fonctionné")
+                    print(f"Erreur lors de la récupération de la page {page}: {str(e)}")
+                    has_more_pages = False
+            
+            if all_films:
+                return {'films': all_films}
+            
             return None
-
+            
         except Exception as e:
             print(f"Erreur lors de l'appel à l'API: {str(e)}")
             return None
