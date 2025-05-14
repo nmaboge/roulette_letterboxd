@@ -400,7 +400,8 @@ class LetterboxdScraper:
             
             # Extraire l'ID du film et construire l'URL du poster
             film_id = film_url.strip('/').split('/')[-1]
-            poster_url = f"https://letterboxd.com/ajax/poster/film/{film_id}/std/300x450/"
+            # Utiliser l'URL directe du CDN de Letterboxd
+            poster_url = f"https://a.ltrbxd.com/resized/film-poster/{film_id}/0/500/0-750-0-70-crop.jpg"
             
             # Vérifier si l'image existe
             try:
