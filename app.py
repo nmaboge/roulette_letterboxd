@@ -16,25 +16,34 @@ def index():
 @app.route('/api/random-movie', methods=['POST'])
 def get_random_movie():
     try:
-        # Récupération de l'URL depuis le JSON (pour API via fetch)
+        # Récupération des données depuis le JSON
         data = request.get_json()
-        url = data.get('url') if data else None
+        list_type = data.get('type')
+        username = data.get('username')
         
         # Fallback pour form-data
-        if not url and request.form:
-            url = request.form.get('url')
+        if not list_type and request.form:
+            list_type = request.form.get('type')
+            username = request.form.get('username')
             
-        if not url:
-            return jsonify({'error': 'URL manquante'}), 400
+        if not list_type or not username:
+            return jsonify({'error': 'Type de liste et pseudo requis'}), 400
             
-        if 'letterboxd.com' not in url:
-            return jsonify({'error': 'URL invalide. Veuillez entrer une URL Letterboxd valide.'}), 400
+        # Construction de l'URL selon le type
+        if list_type == 'watchlist':
+            url = f'https://letterboxd.com/{username}/watchlist/'
+        elif list_type == 'list':
+            url = f'https://letterboxd.com/{username}/list/'
+        elif list_type == 'films':
+            url = f'https://letterboxd.com/{username}/films/'
+        else:
+            return jsonify({'error': 'Type de liste invalide'}), 400
         
         scraper = LetterboxdScraper()
         film = scraper.get_films(url)
         
         if not film:
-            return jsonify({'error': 'Aucun film trouvé dans cette watchlist.'}), 404
+            return jsonify({'error': 'Aucun film trouvé dans cette liste.'}), 404
         
         return jsonify(film)
     
