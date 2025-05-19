@@ -462,6 +462,8 @@ class LetterboxdScraper:
                 self.list_type = 'list'
                 self.username = path_parts[0]
                 self.list_slug = path_parts[2]
+                # Reconstruire l'URL proprement
+                url = f"{parsed.scheme}://{parsed.netloc}/{path_parts[0]}/list/{path_parts[2]}"
             else:
                 self.username = path_parts[0]
                 self.list_type = path_parts[1]
