@@ -45,33 +45,30 @@ class LetterboxdScraper:
                 return False
             
             path_parts = parsed.path.strip('/').split('/')
-            if len(path_parts) < 2:
-                return False
             
-            # Extraire le username et le type de liste
-            self.username = path_parts[0]
-            self.list_type = path_parts[1]
+            # Cas des listes personnalisées
+            if path_parts[0] == 'list' and len(path_parts) >= 2:
+                self.list_type = 'list'
+                self.list_slug = path_parts[1]
+                return True
             
-            # Vérifier si c'est un profil privé connu
-            if self.list_type == 'profile-private':
-                raise Exception("Ce profil est privé. Les listes ne sont pas accessibles.")
-            
-            if len(path_parts) > 2:
-                self.list_slug = path_parts[2]
-            
-            # Vérifier le type de liste
-            valid = (
-                (len(path_parts) == 2 and path_parts[1] in ['watchlist', 'films']) or
-                (len(path_parts) >= 3 and path_parts[1] == 'list')
-            )
-            
-            if not valid:
-                raise Exception("Type de liste non supporté. Utilisez 'watchlist', 'films' ou une liste personnalisée.")
+            # Cas des watchlists et films
+            if len(path_parts) >= 2:
+                self.username = path_parts[0]
+                self.list_type = path_parts[1]
                 
-            return valid
+                # Vérifier si c'est un profil privé connu
+                if self.list_type == 'profile-private':
+                    raise Exception("Ce profil est privé. Les listes ne sont pas accessibles.")
+                
+                # Vérifier le type de liste
+                if self.list_type in ['watchlist', 'films']:
+                    return True
+            
+            return False
             
         except Exception as e:
-            if str(e).startswith("Type de liste") or str(e).startswith("Ce profil"):
+            if str(e).startswith("Ce profil"):
                 raise
             return False
 
