@@ -30,22 +30,31 @@ def get_random_movie():
             return jsonify({'error': 'Type de liste et pseudo requis'}), 400
             
         # Construction de l'URL selon le type
-        if list_type == 'watchlist':
-            url = f'https://letterboxd.com/{username}/watchlist/'
-        elif list_type == 'list':
-            url = f'https://letterboxd.com/list/{username}/'
-        elif list_type == 'films':
-            url = f'https://letterboxd.com/{username}/films/'
-        else:
-            return jsonify({'error': 'Type de liste invalide'}), 400
+        try:
+            if list_type == 'watchlist':
+                url = f'https://letterboxd.com/{username}/watchlist/'
+            elif list_type == 'list':
+                # Pour les listes personnalisées, le username est en fait le nom de la liste
+                url = f'https://letterboxd.com/list/{username}/'
+            elif list_type == 'films':
+                url = f'https://letterboxd.com/{username}/films/'
+            else:
+                return jsonify({'error': 'Type de liste invalide'}), 400
+        except Exception as e:
+            return jsonify({'error': f'Erreur lors de la construction de l\'URL: {str(e)}'}), 400
         
-        scraper = LetterboxdScraper()
-        film = scraper.get_films(url)
-        
-        if not film:
-            return jsonify({'error': 'Aucun film trouvé dans cette liste.'}), 404
-        
-        return jsonify(film)
+        try:
+            scraper = LetterboxdScraper()
+            film = scraper.get_films(url)
+            
+            if not film:
+                return jsonify({'error': 'Aucun film trouvé dans cette liste.'}), 404
+            
+            return jsonify(film)
+        except requests.exceptions.RequestException as e:
+            return jsonify({'error': 'Impossible d\'accéder à la liste. Vérifiez que le pseudo ou le nom de la liste est correct.'}), 404
+        except Exception as e:
+            return jsonify({'error': f'Erreur lors de la récupération des films: {str(e)}'}), 500
     
     except Exception as e:
         return jsonify({'error': f'Une erreur est survenue: {str(e)}'}), 500
