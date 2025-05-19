@@ -4,6 +4,7 @@ from flask_wtf import CSRFProtect
 import os
 import requests
 from io import BytesIO
+from urllib.parse import urlparse
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24))
@@ -37,10 +38,15 @@ def get_random_movie():
                 # Pour les listes personnalisées, on utilise l'URL complète
                 if not username.startswith('http'):
                     return jsonify({'error': 'Pour les listes personnalisées, veuillez entrer l\'URL complète de la liste (ex: https://letterboxd.com/username/list/nom-de-la-liste/)'}), 400
-                # Nettoyer l'URL pour éviter les doubles slashes
-                url = username.rstrip('/')
-                if url.endswith('/'):
-                    url = url[:-1]
+                # Extraire l'URL de la liste
+                try:
+                    parsed_url = urlparse(username)
+                    if not parsed_url.netloc == 'letterboxd.com':
+                        return jsonify({'error': 'URL invalide. L\'URL doit être une liste Letterboxd.'}), 400
+                    # Reconstruire l'URL proprement
+                    url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}".rstrip('/')
+                except Exception as e:
+                    return jsonify({'error': f'URL invalide: {str(e)}'}), 400
             elif list_type == 'films':
                 url = f'https://letterboxd.com/{username}/films/'
             else:
