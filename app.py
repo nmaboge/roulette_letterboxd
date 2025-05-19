@@ -33,7 +33,7 @@ def get_random_movie():
         if list_type == 'watchlist':
             url = f'https://letterboxd.com/{username}/watchlist/'
         elif list_type == 'list':
-            url = f'https://letterboxd.com/{username}/list/'
+            url = f'https://letterboxd.com/list/{username}/'
         elif list_type == 'films':
             url = f'https://letterboxd.com/{username}/films/'
         else:
