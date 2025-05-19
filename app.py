@@ -38,19 +38,8 @@ def get_random_movie():
                 # Pour les listes personnalisées, on utilise l'URL complète
                 if not username.startswith('http'):
                     return jsonify({'error': 'Pour les listes personnalisées, veuillez entrer l\'URL complète de la liste (ex: https://letterboxd.com/username/list/nom-de-la-liste/)'}), 400
-                # Extraire l'URL de la liste
-                try:
-                    parsed_url = urlparse(username)
-                    if not parsed_url.netloc == 'letterboxd.com':
-                        return jsonify({'error': 'URL invalide. L\'URL doit être une liste Letterboxd.'}), 400
-                    # Extraire les composants de l'URL
-                    path_parts = parsed_url.path.strip('/').split('/')
-                    if len(path_parts) < 3 or path_parts[1] != 'list':
-                        return jsonify({'error': 'URL invalide. Le format doit être: https://letterboxd.com/username/list/nom-de-la-liste/'}), 400
-                    # Reconstruire l'URL proprement
-                    url = f"{parsed_url.scheme}://{parsed_url.netloc}/{path_parts[0]}/list/{path_parts[2]}"
-                except Exception as e:
-                    return jsonify({'error': f'URL invalide: {str(e)}'}), 400
+                # Utiliser directement l'URL fournie
+                url = username.rstrip('/')
             elif list_type == 'films':
                 url = f'https://letterboxd.com/{username}/films/'
             else:
