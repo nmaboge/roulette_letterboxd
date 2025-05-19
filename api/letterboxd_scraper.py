@@ -457,9 +457,11 @@ class LetterboxdScraper:
             parsed = urlparse(url)
             path_parts = parsed.path.strip('/').split('/')
             
-            if path_parts[0] == 'list':
+            # Cas des listes personnalisées
+            if len(path_parts) >= 3 and path_parts[1] == 'list':
                 self.list_type = 'list'
-                self.list_slug = path_parts[1]
+                self.username = path_parts[0]
+                self.list_slug = path_parts[2]
             else:
                 self.username = path_parts[0]
                 self.list_type = path_parts[1]
