@@ -451,10 +451,18 @@ class LetterboxdScraper:
     def get_films(self, url):
         """Récupère un film aléatoire depuis une liste Letterboxd."""
         try:
-            if not self._is_valid_letterboxd_list_url(url):
-                raise Exception("URL invalide. Veuillez entrer une URL de liste Letterboxd valide.")
-
             print(f"\nRécupération des films depuis: {url}")
+            
+            # Extraire le type de liste et le username/slug de l'URL
+            parsed = urlparse(url)
+            path_parts = parsed.path.strip('/').split('/')
+            
+            if path_parts[0] == 'list':
+                self.list_type = 'list'
+                self.list_slug = path_parts[1]
+            else:
+                self.username = path_parts[0]
+                self.list_type = path_parts[1]
             
             # Essayer d'abord l'API pour les watchlists et les films
             if hasattr(self, 'username') and hasattr(self, 'list_type'):
