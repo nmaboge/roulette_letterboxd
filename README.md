@@ -54,7 +54,7 @@ python api/index.py
 
 1. Lancez l'application :
 ```bash
-python app.py
+python api/index.py
 ```
 
 2. Ouvrez votre navigateur et accédez à `http://localhost:5000`
