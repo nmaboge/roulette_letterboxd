@@ -1,5 +1,10 @@
 from flask import Flask, render_template, request, jsonify, Response, send_file
-from letterboxd_scraper import LetterboxdScraper
+# Import the scraper from the `api` package. When running the application
+# locally with `python app.py`, the scraper lives inside the `api` package so we
+# need to use the package import. The previous absolute import failed with a
+# `ModuleNotFoundError` because `letterboxd_scraper.py` does not exist at the
+# project root.
+from api.letterboxd_scraper import LetterboxdScraper
 from flask_wtf import CSRFProtect
 import os
 import requests
