@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, Response, send_file
-from letterboxd_scraper import LetterboxdScraper
+from letterboxd import LetterboxdScraper
 from flask_wtf import CSRFProtect
 import os
 import requests

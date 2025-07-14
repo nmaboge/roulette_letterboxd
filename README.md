@@ -45,7 +45,7 @@ python api/index.py
 
 - `api/` : Code de l'application Flask et du scraper
   - `index.py` : Point d'entrée de l'application
-  - `letterboxd_scraper.py` : Logique de scraping
+  - `letterboxd.py` : Logique de scraping
 - `templates/` : Templates HTML
 - `vercel.json` : Configuration du déploiement
 - `requirements.txt` : Dépendances Python
