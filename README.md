@@ -92,7 +92,7 @@ Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
 Créez un fichier `config.ini` :
 ```ini
 [letterboxd]
-remplacer l'url par l'url de la liste ou watchlist voulu
+Remplacez l’URL par l’URL de la liste ou watchlist voulue
 ```
 
 ## 📸 Exemple de sortie
