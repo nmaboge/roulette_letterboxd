@@ -4,3 +4,4 @@ flask-wtf==1.0.0
 requests==2.26.0
 beautifulsoup4==4.9.3
 html5lib==1.1
+pytest==8.1.1
