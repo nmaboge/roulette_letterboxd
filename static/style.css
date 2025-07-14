@@ -1,0 +1,22 @@
+/* Custom animations and styles */
+body {
+    background: linear-gradient(135deg, #14181c 0%, #1f2937 100%);
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+}
+
+.fade-in {
+    animation: fadeIn 0.6s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.scale-hover {
+    transition: transform 0.2s ease-in-out;
+}
+
+.scale-hover:hover {
+    transform: scale(1.05);
+}
